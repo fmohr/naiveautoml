@@ -1,0 +1,7 @@
+/.ipynb_checkpoints/
+/__pycache__/
+/tmp/
+/test.simg
+/getpredictions.py
+/timeout-test.ipynb
+/ga-test.ipynb

@@ -1,0 +1,19 @@
+Setting memory limit to 10240MB
+Reading dataset 1485
+Done, starting.
+Fitting NaiveAutoml model. Configs:
+	Timeout: 30 (Deadline 1614358878.5508664)
+	Scaling: False
+	Filtering: False
+	Wrapping: False
+	Meta-Learners: True
+	Tuning: False
+Validation configuration: None
+X_train: (2340, 500)
+X_valid: -
+Created a pool with training data of shape (2340, 500) and anchor point configuration [(100, 5), (200, 5), (500, 4), (1000, 3), (1638, 2)]
+Starting probing stage
+Evaluating candidate set of 17 entries. Current memory usage: 213.96875MB. Time to deadline is 29.999800205230713s. Now awaiting results.
+No parallelism, executing the task in this very thread.
+Initializing evaluationg of (None, None, <class 'sklearn.svm._classes.LinearSVC'>, {}) on None. 214.03515625MB. Now awaiting results.
+Evaluating (None, None, <class 'sklearn.svm._classes.LinearSVC'>, {}) for 29.989745140075684s on size 1638/2340 with seed 0
