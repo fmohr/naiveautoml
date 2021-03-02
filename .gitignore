@@ -1,0 +1,12 @@
+/.gradle/
+/.settings/
+/bin/
+/logs/
+/.classpath
+/.project
+/build/
+/tmp/
+/tmpAuto-WEKA/
+/autoweka-2.6.tar.gz
+/autoweka-2.6.zip
+/naiveautoml.log
