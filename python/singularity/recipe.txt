@@ -38,12 +38,33 @@ galocal.py /
     
     #install packages
     apt-get -y install apt-transport-https ca-certificates gnupg2 git curl build-essential systemd gcc software-properties-common swig
+    
+    # install arrow
+    #apt-get install -y -V ca-certificates lsb-release wget
+#    wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+#    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+#    apt-get update
+#    apt-get install -y -V libarrow-dev # For C++
+#    apt-get install -y -V libarrow-glib-dev # For GLib (C)
+#    apt-get install -y -V libarrow-dataset-dev # For Apache Arrow Dataset C++
+#    apt-get install -y -V libarrow-flight-dev # For Apache Arrow Flight C++
        
     # python stuff
     apt-get -y install python3 python3-pip
     
+    # update pip
+    echo "Updating pip\n------------------------------"
+    pip3 install --upgrade pip
+    
+    # install cython, numpy and scipy
+    echo "Now installing cython, numpy, and scipy\n------------------------------"
+    pip3 install cython numpy scipy
+        
+    # install pyarrow
+    echo "Now installing pyarrow\n------------------------------"
+    pip3 install pyarrow
+    
     echo "Now installing scikit-learn and openml\n------------------------------"
-    LC_ALL=C.UTF-8 pip3 install cython numpy scipy
     LC_ALL=C.UTF-8 pip3 install scikit-learn
     LC_ALL=C.UTF-8 pip3 install openml
 
@@ -60,6 +81,9 @@ galocal.py /
     # install auto-sklearn
     echo "Now installing auto-sklearn\n------------------------------"
     curl https://raw.githubusercontent.com/automl/auto-sklearn/master/requirements.txt | LC_ALL=C.UTF-8 xargs -n 1 -L 1 pip3 install
-    pip3 install 'auto-sklearn==0.12.0'
+    pip3 install 'auto-sklearn==0.12.6'
     
 
+    # install GAMA
+    echo "Now installing GAMA\n-----------------------------------"
+    pip3 install git+https://github.com/openml-labs/gama.git

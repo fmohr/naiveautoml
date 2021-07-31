@@ -37,33 +37,33 @@ from naiveautoml import *
 
 
 if __name__ == '__main__':
-    execution_timeout = 60
-    timeout = 60 * 60
+    # timeouts
+    timeout = int(sys.argv[4])
+    if timeout in [120, 3600]:
+        execution_timeout = 300
+    elif timeout == 86400:
+        execution_timeout = 1200
+    else:
+        raise Exception("Invalid timeout: " + str(timeout))
     
+    print("Timeout:", timeout)
+    print("Timeout for evaluation:", execution_timeout)
     
-    memory_limit = 28 * 1024
+    # memory limits
+    memory_limit = 20 * 1024
     print("Setting memory limit to " + str(memory_limit) + "MB")
     soft, hard = resource.getrlimit(resource.RLIMIT_AS) 
     resource.setrlimit(resource.RLIMIT_AS, (memory_limit * 1024 * 1024, memory_limit * 1024 * 1024)) 
     
-    print("Args: " + str(sys.argv))
-    
-    options = ast.literal_eval(sys.argv[1])
-    print("Options: " + str(options))
-    enable_scaling = options[0]
-    enable_filtering = options[1]
-    enable_meta = options[2]
-    enable_wrapping = options[3]
-    enable_tuning = options[4]
-    enable_validation = options[5]
-    iterative_evaluations = options[6]
-    
-    folder = sys.argv[2][:sys.argv[2].rindex("/")]
+    # folder
+    folder = sys.argv[1][:sys.argv[1].rindex("/")]
     print("Folder is:",folder)
     
-    dfTrain = pd.read_csv(sys.argv[2])
-    dfTest = pd.read_csv(sys.argv[3])
-    labelColumn = sys.argv[4]
+    dfTrain = pd.read_csv(sys.argv[1])
+    dfTest = pd.read_csv(sys.argv[2])
+    labelColumn = sys.argv[3]
+    
+    labels = pd.unique(dfTrain[labelColumn])
     non_target_cols = [c for c in dfTrain.columns if not c == labelColumn]
     
     dfUnion = pd.concat([dfTrain[non_target_cols], dfTest[non_target_cols]], ignore_index=True)
@@ -76,10 +76,10 @@ if __name__ == '__main__':
         if expansion_size > 10**5:
             break
     if expansion_size < 10**5:
-        X = pd.get_dummies(dfUnion[[c for c in dfUnion.columns if c != labelColumn]]).values.astype(float)
+        X = pd.get_dummies(dfUnion[[c for c in dfUnion.columns if c != labelColumn]]).fillna(0).values.astype(float)
     else:
         print("creating SPARSE data")
-        dfSparse = pd.get_dummies(dfUnion[[c for c in dfUnion.columns if c != labelColumn]], sparse=True)
+        dfSparse = pd.get_dummies(dfUnion[[c for c in dfUnion.columns if c != labelColumn]], sparse=True).fillna(0)
         
         print("dummies created, now creating sparse matrix")
         X = lil_matrix(dfSparse.shape, dtype=np.float32)
@@ -98,42 +98,47 @@ if __name__ == '__main__':
     y_test = dfTest[labelColumn].values
     print(str(X_train.shape[0]) + " training instances and " + str(X_test.shape[0]) + " test instances.")
     
-    automl = NaiveAutoML(scaling = enable_scaling, filtering=enable_filtering, metalearning=enable_meta, wrapping=enable_wrapping,tuning=enable_tuning,validation=enable_validation, num_cpus = 1, execution_timeout = execution_timeout, iterative_evaluations = iterative_evaluations, timeout=timeout)
+    print("Number of classes in train data:", len(pd.unique(y_train)))
+    print("Number of classes in test data:", len(pd.unique(y_test)))
+    
+    
+    metric_sk = sklearn.metrics.roc_auc_score if len(labels) == 2  else sklearn.metrics.log_loss
+    scoring = "roc_auc" if len(labels) == 2 else "neg_log_loss"
+    automl = NaiveAutoML("searchspace.json", scoring, num_cpus = 1, execution_timeout = execution_timeout, timeout=timeout, standard_classifier=sklearn.neighbors.KNeighborsClassifier)
     automl.fit(X_train, y_train)
     y_hat = automl.predict(X_test)
-    score = 1 - sklearn.metrics.accuracy_score(y_test, y_hat)
+    y_hat_proba = automl.predict_proba(X_test)
+    
+    if metric_sk == sklearn.metrics.roc_auc_score:
+        y_hat_proba = y_hat_proba[:,1]
+    error_rate = 1 - sklearn.metrics.accuracy_score(y_test, y_hat)
+    requested_metric = metric_sk(y_test, y_hat_proba, labels=labels)
     
     # serialize error rate into file
-    print("Error Rate:", score)
-    f = open(folder + "/score.txt", "w")
-    f.write(str(score))
+    print("Error Rate:", error_rate)
+    print("Requested Metric:", requested_metric)
+    f = open(folder + "/error_rate.txt", "w")
+    f.write(str(error_rate))
     f.close()
-    model = automl.chosen_model
+    f = open(folder + "/score.txt", "w")
+    f.write(str(requested_metric))
+    f.close()
     
     # write chosen model into file
+    model = automl.chosen_model
     print("Chosen Model:", str(model))
     f = open(folder + "/model.txt", "w")
     f.write(str(model))
     f.close()
     
     # write online data into file
-    runtime_info = automl.getStageRuntimeInfo()
-    history = automl.getHistory()
-    history = [[h[0],h[1]] for h in sorted(history,key=lambda t: t[0])]
-    history_reduced = history.copy()
-    i = 0
-    while i < len(history_reduced):
-        if i > 0 and history_reduced[i][1] >= history_reduced[i-1][1]:
-            del history_reduced[i]
-        else:
-            i += 1
+    score_history = automl.eval_history(X_train, y_train)
+    history = []
+    for i, score in enumerate(score_history):
+        history_entry = automl.history[i]
+        if not np.isnan(score):
+            history.append([history_entry["time"], str(history_entry["pl"]), score])
     print("History        : " + str(history))
-    print("History Reduced: " + str(history_reduced))
                                  
-    online_data = {
-        "history": history_reduced,
-        "stageruntimes": {s: runtime_info[s]["runtime"] for s in runtime_info}
-    }
-    f = open(folder + "/onlinedata.txt", "w")
-    f.write(str(online_data).replace("'", "\""))
-    f.close()
+    with open(folder + "/onlinedata.txt", "w") as outfile: 
+        json.dump(history, outfile)

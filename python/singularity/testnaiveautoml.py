@@ -33,13 +33,14 @@ import resource
          
 if __name__ == '__main__':
     
-    #openmlid = 61
+    openmlid = 61
     #openmlid = 4534
     #openmlid = 41147
     #openmlid = 4541
-#    X, y = getDataset(1457)
+    #openmlid = 1457
     #openmlid = 1515
-    openmlid = 1485
+    #openmlid = 1485
+    #openmlid = 41027
     #openmlid = 23512
     #X, y = getDataset(61)
     #X, y = getDataset(41145)
@@ -52,26 +53,34 @@ if __name__ == '__main__':
     print("Reading dataset " + str(openmlid))
     X, y = getDataset(openmlid)
     print("Done, starting.")
+    scoring = "neg_log_loss"
+    metric = sklearn.metrics.log_loss
     scores = []
-    for seed in range(1):
+    for seed in range(0, 1):
         X_train, X_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, train_size=0.9, random_state = seed)
-        naml = NaiveAutoML(scaling = False, filtering=False, wrapping=False, metalearning=False, tuning=False, validation=0.2, num_cpus = 8, execution_timeout = 60, iterative_evaluations = False, timeout=30)
+        naml = NaiveAutoML("searchspace.json", scoring, num_cpus = 8, execution_timeout = 300, timeout=3600, standard_classifier=sklearn.tree.DecisionTreeClassifier)
         naml.fit(X_train, y_train)
-        print("Chosen model: " + str(naml.chosen_model))
-        y_hat = naml.predict(X_valid)
-        score = 1 - sklearn.metrics.accuracy_score(y_valid, y_hat)
+        print("Chosen model: " + str(naml.pl))
+        print("Now creating predictions for " + str() + " instances.")
+        print("History length:", len(naml.history))
+        print("Eval history")
+        try:
+            score_history = naml.eval_history(X_train, y_train)
+            online_data = []
+            for i, score in enumerate(score_history):
+                pl_json = naml.history[i].copy()
+                pl_json["score"] = score
+                online_data.append(pl_json)
+            print(online_data)
+        except:
+            print("An error occured in the evaluation of the history.")
+        
+        y_hat = naml.predict_proba(X_valid)
+        #for i, pred in enumerate(y_hat):
+         #   print(pred, "(ground truth is " + str(y_valid[i]))
+        score = metric(y_valid, y_hat, labels=np.unique(y))
         print("Test score:", score)
         scores.append(score)
-        
-        print("Report on improvement over the stages:")
-        for i, pool in enumerate(naml.pools):
-            print(i, pool.bestScore)
-            
-        print("History:")
-        print(naml.getHistory())
-        
-        print("Stage Runtimes:")
-        print(naml.getStageRuntimeInfo())
 
     print(scores)
     print(np.mean(scores))

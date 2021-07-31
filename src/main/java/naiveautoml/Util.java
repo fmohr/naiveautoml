@@ -26,7 +26,7 @@ public class Util {
 
 	static {
 		try {
-			components = MLPlanWekaBuilder.forClassification().withDataset(OpenMLDatasetReader.deserializeDataset(30)).build().getHASCO().getInput().getComponents();
+			components = MLPlanWekaBuilder.forClassification().withDataset(new OpenMLDatasetReader().deserializeDataset(30)).build().getHASCO().getInput().getComponents();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

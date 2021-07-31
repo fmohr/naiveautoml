@@ -61,18 +61,19 @@ dependencies {
 	compile group: 'com.github.fommil.netlib', name: 'core', version: '1.1.2'
 
 
-	compile ('ai.libs:jaicore-ea:0.2.4') {
-		exclude group: 'log4j'
-		exclude group: 'org.slf4j'
-	}
-	compile ('ai.libs:jaicore-experiments:0.2.4') {
-		exclude group: 'log4j'
-		exclude group: 'org.slf4j'
-	}
-	compile ('ai.libs:mlplan-weka:0.2.4') {
-		exclude group: 'log4j'
-		exclude group: 'org.slf4j'
-	}
+	//compile ('ai.libs:jaicore-ea:0.2.4') {
+		//exclude group: 'log4j'
+		//exclude group: 'org.slf4j'
+	//}
+	//compile ('ai.libs:jaicore-experiments:0.2.4') {
+		//exclude group: 'log4j'
+		//exclude group: 'org.slf4j'
+	//}
+	//compile ('ai.libs:mlplan-weka:0.2.4') {
+		//exclude group: 'log4j'
+		//exclude group: 'org.slf4j'
+	//}
+	
 	// dependencies for development time
 	//compile "ai.libs:jaicore-experiments"
  	//compile "ai.libs:jaicore-basic"
@@ -80,7 +81,9 @@ dependencies {
  	//compile "ai.libs:jaicore-ea"
  	//compile "ai.libs:jaicore-ml"
  	//compile "ai.libs:jaicore-ml-weka"
- 	//compile "ai.libs:mlplan-weka"
+ 	compile "ai.libs:mlplan-weka"
+ 	compile "ai.libs:jaicore-ea"
+ 	compile "ai.libs:jaicore-experiments"
  	
  	//compile "ai.libs:hasco-core"
  	

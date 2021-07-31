@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.api4.java.ai.ml.core.dataset.supervised.ILabeledDataset;
 import org.api4.java.ai.ml.core.dataset.supervised.ILabeledInstance;
@@ -29,6 +30,7 @@ import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.AtomicDouble;
 
 import ai.libs.jaicore.basic.FileUtil;
+import ai.libs.jaicore.experiments.Experiment;
 import ai.libs.jaicore.experiments.ExperimentDBEntry;
 import ai.libs.jaicore.experiments.ExperimenterFrontend;
 import ai.libs.jaicore.experiments.IExperimentIntermediateResultProcessor;
@@ -66,7 +68,7 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 
 	private static final Logger logger = LoggerFactory.getLogger("experimenter");
 
-	public static final Timeout TIMEOUT_SOTA_TOOLS = new Timeout(1, TimeUnit.HOURS);
+	public static final Timeout TIMEOUT_SOTA_TOOLS = new Timeout(24, TimeUnit.HOURS);
 
 
 	public NaiveAutoML getNaiveAutoML(final String algo) {
@@ -104,12 +106,16 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 			int openmlid = Integer.valueOf(keys.get("openmlid"));
 			int seed = Integer.valueOf(keys.get("seed"));
 			String algo = keys.get("algorithm");
+			int timeout = Integer.valueOf(keys.get("timeout"));
 
 			/* create split and final evaluator */
-			ILabeledDataset<ILabeledInstance> dsOrig = OpenMLDatasetReader.deserializeDataset(openmlid);
-			logger.info("Applying approach to dataset with dimensions {} x {}", dsOrig.size(), dsOrig.getNumAttributes());
-			WekaInstances ds = new WekaInstances(dsOrig);
-			List<WekaInstances> trainTestSplit = SplitterUtil.getLabelStratifiedTrainTestSplit(ds, seed, 0.9);
+			OpenMLDatasetReader reader = new OpenMLDatasetReader();
+			reader.setLoggerName(logger.getName() + ".openmlreader");
+			ILabeledDataset<ILabeledInstance> dsOrig = reader.deserializeDataset(openmlid);
+			logger.info("Applying approach to dataset with dimensions {} x {}. Now creating instances object.", dsOrig.size(), dsOrig.getNumAttributes());
+			//			WekaInstances ds = new WekaInstances(dsOrig);
+			logger.info("Done. Creating stratified split.");
+			List<WekaInstances> trainTestSplit = SplitterUtil.getLabelStratifiedTrainTestSplit(dsOrig, seed, 0.9).stream().map(i -> new WekaInstances(i)).collect(Collectors.toList());
 			dsOrig = null; // make memory
 
 			/* find best pipeline */
@@ -118,8 +124,9 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 
 			String chosenModel;
 			double finalErrorRate;
+			double finalRequestedMetric = Double.NaN;
 			JsonNode onlineData = null;
-			if (algo.startsWith("naive")) {
+			if (algo.startsWith("scientist")) {
 
 				if (algo.contains("java")) {
 					logger.info("Running Naive AutoML on dataset {}", openmlid);
@@ -183,7 +190,7 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 					sb.append(",");
 					sb.append(algo.contains("noniterative") ? "False" : "True");
 					sb.append(")");
-					List<Object> evalResults = this.runPythonExperiment(trainTestSplit, "runnaive.py", sb.toString());
+					List<Object> evalResults = this.runPythonExperiment(trainTestSplit, "runnaive.py", sb.toString(), timeout);
 					chosenModel = (String)evalResults.get(0);
 					finalErrorRate = (double)evalResults.get(1);
 					onlineData = new ObjectMapper().readTree((String)evalResults.get(2));
@@ -239,9 +246,32 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 				onlineData = this.compileHistoryMaps(runtimesPerStage, bestScoreHistory);
 			}
 			else if (algo.equals("auto-sklearn")) {
-				List<Object> evalResults = this.runPythonExperiment(trainTestSplit, "runautosklearn.py");
+				List<Object> evalResults = this.runPythonExperiment(trainTestSplit, "runautosklearn.py", timeout);
 				chosenModel = (String)evalResults.get(0);
 				finalErrorRate = (double)evalResults.get(1);
+				finalRequestedMetric = (double)evalResults.get(2);
+				onlineData = new ObjectMapper().readTree((String)evalResults.get(3));
+			}
+			else if (algo.equals("naive-python")) {
+				List<Object> evalResults = this.runPythonExperiment(trainTestSplit, "runnaive.py", timeout);
+				chosenModel = (String)evalResults.get(0);
+				finalErrorRate = (double)evalResults.get(1);
+				finalRequestedMetric = (double)evalResults.get(2);
+				onlineData = new ObjectMapper().readTree((String)evalResults.get(3));
+			}
+			else if (algo.equals("seminaive-python")) {
+				List<Object> evalResults = this.runPythonExperiment(trainTestSplit, "runseminaive.py", timeout);
+				chosenModel = (String)evalResults.get(0);
+				finalErrorRate = (double)evalResults.get(1);
+				finalRequestedMetric = (double)evalResults.get(2);
+				onlineData = new ObjectMapper().readTree((String)evalResults.get(3));
+			}
+			else if (algo.equals("gama")) {
+				List<Object> evalResults = this.runPythonExperiment(trainTestSplit, "rungama.py", timeout);
+				chosenModel = (String)evalResults.get(0);
+				finalErrorRate = (double)evalResults.get(1);
+				finalRequestedMetric = (double)evalResults.get(2);
+				onlineData = new ObjectMapper().readTree((String)evalResults.get(3));
 			}
 			else {
 				throw new IllegalArgumentException();
@@ -251,6 +281,7 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 
 			results.put("chosenmodel", chosenModel);
 			results.put("errorrate", finalErrorRate);
+			results.put("metric", finalRequestedMetric);
 			if (onlineData != null) {
 				results.put("onlinedata", onlineData.toString());
 			}
@@ -285,11 +316,11 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 		return infoNode;
 	}
 
-	public List<Object> runPythonExperiment(final List<WekaInstances> trainTestSplit, final String file) throws InterruptedException, IOException, ProcessIDNotRetrievableException {
-		return this.runPythonExperiment(trainTestSplit, file, null);
+	public List<Object> runPythonExperiment(final List<WekaInstances> trainTestSplit, final String file, final int timeout) throws InterruptedException, IOException, ProcessIDNotRetrievableException {
+		return this.runPythonExperiment(trainTestSplit, file, null, timeout);
 	}
 
-	public List<Object> runPythonExperiment(final List<WekaInstances> trainTestSplit, final String file, final String options) throws InterruptedException, IOException, ProcessIDNotRetrievableException {
+	public List<Object> runPythonExperiment(final List<WekaInstances> trainTestSplit, final String file, final String options, final int timeout) throws InterruptedException, IOException, ProcessIDNotRetrievableException {
 
 		String id = UUID.randomUUID().toString();
 
@@ -311,7 +342,9 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 		String singularityImage = "test.simg";
 		System.out.println("Executing " + new File(workingDirectory + File.separator + file) + " in singularity.");
 		System.out.println("Options: " + options);
-		ProcessBuilder pb = new ProcessBuilder(Arrays.asList("singularity", "exec", singularityImage, "bash", "-c", "python3 " + file + (options == null ? "" : " \"" + options + "\"") + " " + trainFile + " " + testFile + " " + labelAttribute));
+		List<String> cmd = Arrays.asList("singularity", "exec", singularityImage, "bash", "-c", "python3 " + file + (options == null ? "" : " \"" + options + "\"") + " " + trainFile + " " + testFile + " " + labelAttribute + " " + timeout);
+		System.out.println("Running " + cmd);
+		ProcessBuilder pb = new ProcessBuilder(cmd);
 		pb.directory(workingDirectory);
 		pb.redirectErrorStream(true);
 		System.out.println("Clearing memory.");
@@ -334,14 +367,28 @@ public class NaiveAutoMLExperimentRunner implements IExperimentSetEvaluator {
 			System.out.println("ready");
 
 			Object chosenModel = FileUtil.readFileAsString(new File(folder + File.separator + "model.txt"));
-			Object finalErrorRate = Double.valueOf(FileUtil.readFileAsString(new File(folder + File.separator + "score.txt")));
-			String onlinedata = FileUtil.readFileAsString(new File(folder + File.separator + "onlinedata.txt"));
-			return Arrays.asList(chosenModel, finalErrorRate, onlinedata);
+			Object finalErrorRate = Double.valueOf(FileUtil.readFileAsString(new File(folder + File.separator + "error_rate.txt")));
+			Object finalRequestedMetric = Double.valueOf(FileUtil.readFileAsString(new File(folder + File.separator + "score.txt")));
+			File onlineDataFile = new File(folder + File.separator + "onlinedata.txt");
+			String onlinedata =  onlineDataFile.exists() ? FileUtil.readFileAsString(onlineDataFile) : "[]";
+			return Arrays.asList(chosenModel, finalErrorRate, finalRequestedMetric, onlinedata);
 		}
 		finally {
 			System.out.println("KILLING PROCESS!");
 			ProcessUtil.killProcess(p);
 		}
+	}
+
+	public static void simulateAlgorithm(final int openmlid, final String algo) throws ExperimentEvaluationFailedException, ExperimentFailurePredictionException, InterruptedException {
+		Map<String, String> exp = new HashMap<>();
+
+		exp.put("openmlid", "" + openmlid);
+		exp.put("seed", "0");
+		exp.put("timeout", "120");
+		exp.put("algorithm", algo);
+
+		new NaiveAutoMLExperimentRunner().evaluate(new ExperimentDBEntry(0, new Experiment(8000, 1, exp)), p -> {});
+
 	}
 
 	public static void main(final String[] args) throws ExperimentDBInteractionFailedException, InterruptedException, ExperimentEvaluationFailedException, ExperimentFailurePredictionException {
