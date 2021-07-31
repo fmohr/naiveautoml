@@ -8,3 +8,4 @@ Find the source for:
 - Java: in  the `src` folder
 - Python: in the python folder. All the code is in the `naiveautoml.py`
 - Result Preparation: In `python/results.ipynb`
+- search space definition: `python/singularity/searchspace.json
