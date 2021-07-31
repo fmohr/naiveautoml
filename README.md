@@ -1,7 +1,7 @@
 # naiveautoml
 This is the official repository coming along with the paper.
 ```
-Naive Automated Machine Learning: A Late Baseline for AutoML
+Naive Automated Machine Learning
 Felix Mohr, Marcel Wever
 ```
 Find the source for:
