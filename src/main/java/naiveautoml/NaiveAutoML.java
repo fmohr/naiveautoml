@@ -565,7 +565,7 @@ public class NaiveAutoML implements ILoggingCustomizable {
 		// long seed = 0;
 		// ILabeledDataset<ILabeledInstance> dsOrig = OpenMLDatasetReader.deserializeDataset(23); // albert
 		// ILabeledDataset<ILabeledInstance> dsOrig = OpenMLDatasetReader.deserializeDataset(4538); // GesturePhaseSegmentationProcessed
-		ILabeledDataset<ILabeledInstance> dsOrig = OpenMLDatasetReader.deserializeDataset(1485); // madelon
+		ILabeledDataset<ILabeledInstance> dsOrig = new OpenMLDatasetReader().deserializeDataset(1485); // madelon
 		//		ILabeledDataset<ILabeledInstance> dsOrig = OpenMLDatasetReader.deserializeDataset(1468);
 		// ILabeledDataset<ILabeledInstance> dsOrig = OpenMLDatasetReader.deserializeDataset(1457); // amazon
 		// ILabeledDataset<ILabeledInstance> dsOrig = OpenMLDatasetReader.deserializeDataset(41169); // helena

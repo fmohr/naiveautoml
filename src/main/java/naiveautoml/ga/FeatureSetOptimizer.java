@@ -83,7 +83,7 @@ public class FeatureSetOptimizer {
 	public static void main(final String[] args) throws Exception {
 
 		Random random = new Random(0);
-		IWekaInstances instances = new WekaInstances(OpenMLDatasetReader.deserializeDataset(1485));
+		IWekaInstances instances = new WekaInstances(new OpenMLDatasetReader().deserializeDataset(1485));
 
 
 

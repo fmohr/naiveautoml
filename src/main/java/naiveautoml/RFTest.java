@@ -18,7 +18,7 @@ public class RFTest {
 	public static void main(final String[] args) throws Exception {
 
 		int openmlid = 4541; //4538;// GesturePhaseSegmentationProcessed
-		Instances dsOrig = new WekaInstances(OpenMLDatasetReader.deserializeDataset(openmlid)).getInstances();
+		Instances dsOrig = new WekaInstances(new OpenMLDatasetReader().deserializeDataset(openmlid)).getInstances();
 
 
 		SMO smo = new SMO();
