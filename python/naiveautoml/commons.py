@@ -23,6 +23,9 @@ from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
 import json
 
+import logging
+import warnings
+
 import itertools as it
 
 import os, psutil
@@ -37,7 +40,6 @@ class NestablePool(multiprocessing.pool.Pool):
 	def __init__(self, *args, **kwargs):
 	    kwargs['context'] = NoDaemonContext()
 	    super(NestablePool, self).__init__(*args, **kwargs)
-	    print("Established a nestable pool with params: " + str(*args))
 
 class NoDaemonProcess(multiprocessing.Process):
     @property
@@ -82,20 +84,17 @@ def get_dataset(openmlid):
     if expansion_size < 10**5:
         X = pd.get_dummies(df[[c for c in df.columns if c != ds.default_target_attribute]]).values.astype(float)
     else:
-        print("creating SPARSE data")
         dfSparse = pd.get_dummies(df[[c for c in df.columns if c != ds.default_target_attribute]], sparse=True)
         
-        print("dummies created, now creating sparse matrix")
         X = lil_matrix(dfSparse.shape, dtype=np.float32)
         for i, col in enumerate(dfSparse.columns):
             ix = dfSparse[col] != 0
             X[np.where(ix), i] = 1
-        print("Done. shape is" + str(X.shape))
     return X, y
 
 class EvaluationPool:
 
-    def __init__(self, X, y, scoring, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01):
+    def __init__(self, X, y, scoring, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01, logger_name = None):
         if X is None:
             raise Exception("Parameter X must not be None")
         if y is None:
@@ -109,6 +108,7 @@ class EvaluationPool:
         self.tolerance_tuning = tolerance_tuning
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
+        self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
         
     def merge(self, pool):
         num_entries_before = len(self.cache)
@@ -116,7 +116,7 @@ class EvaluationPool:
             pl, learning_curve, timestamp = pool.cache[spl]
             self.tellEvaluation(pl, learning_curve, timestamp)
         num_entries_after = len(self.cache)
-        print("Adopted " + str(num_entries_after - num_entries_before) + " entries from external pool.")
+        self.logger.info(f"Adopted {num_entries_after - num_entries_before} entries from external pool.")
 
     def tellEvaluation(self, pl, scores, timestamp):
         spl = str(pl)
@@ -127,23 +127,20 @@ class EvaluationPool:
             self.best_spl = spl
             
     def cross_validate(self, pl, X, y, scoring): # just a wrapper to ease parallelism
+        warnings.filterwarnings('ignore', module = 'sklearn')
         try:
             scorer = sklearn.metrics.make_scorer(sklearn.metrics.log_loss if scoring == "neg_log_loss" else sklearn.metrics.roc_auc_score, greater_is_better = scoring != "neg_log_loss", needs_proba=True, labels=list(np.unique(y)))
             return sklearn.model_selection.cross_validate(pl, X, y, scoring=scorer, error_score="raise")
         except:
-            raise
-            #print("OBSERVED ERROR, EXECUTION ABORTED!")
-            #return None
+            return None
 
-    def evaluate(self, pl, timeout=None, deadline=None, verbose=False):
+    def evaluate(self, pl, timeout=None, deadline=None):
         if is_pipeline_forbidden(pl):
-            if verbose:
-                print("Preventing evaluation of forbidden pipeline " + str(pl))
+            self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
             return np.nan
         
         process = psutil.Process(os.getpid())
-        if verbose:
-            print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Initializing evaluation of " + str(pl) + " with current memory consumption " + str(int(process.memory_info().rss / 1024 / 1024))  + "MB. Now awaiting results.")
+        self.logger.info(f"Initializing evaluation of {pl} with current memory consumption {int(process.memory_info().rss / 1024 / 1024)} MB. Now awaiting results.")
         
         start_outer = time.time()
         spl = str(pl)
@@ -158,8 +155,7 @@ class EvaluationPool:
             return np.nan
         scores = result["test_score"]
         runtime = time.time() - start_outer
-        if verbose:
-            print("Completed evaluation of " + spl + " after " + str(runtime) + "s. Scores are", scores)
+        self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores, timestamp)
         return np.round(np.mean(scores), 4)
 
@@ -208,7 +204,6 @@ def build_estimator(comp, params, X, y):
     if params is None:
         if get_class(comp["class"]) == sklearn.svm.SVC:
             params = {"kernel": config_json.read(comp["params"]).get_hyperparameter("kernel").value}
-            print("SVC invoked without params. Setting kernel explicitly to " + params["kernel"])
         else:
             return get_class(comp["class"])()
     
@@ -335,8 +330,6 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         max_iter = float(params["max_iter"])
         shrinking = check_for_bool(params["shrinking"])
         
-        print(kernel, "PROBA")
-
         return sklearn.svm.SVC(C=C, kernel=kernel,degree=degree,gamma=gamma,coef0=coef0,shrinking=shrinking,tol=tol, max_iter=max_iter, decision_function_shape='ovr', probability=True)
     
     
@@ -614,7 +607,6 @@ def get_hyperparameter_space_size(config_space):
         return 0
     size = 1
     for hp in hps:
-        #print(hp.name, type(hp))
         if type(hp) in [ConfigSpace.hyperparameters.UnParametrizedHyperparameter, ConfigSpace.hyperparameters.Constant]:
             continue
             
@@ -677,7 +669,7 @@ sklearn.preprocessing.PowerTransformer, "classifier": sklearn.naive_bayes.Multin
 
 class HPOProcess:
     
-    def __init__(self, step_name, comp, X, y, scoring, execution_timeout, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10):
+    def __init__(self, step_name, comp, X, y, scoring, execution_timeout, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None):
         self.step_name = step_name
         self.index_in_steps = index_in_steps
         self.comp = comp
@@ -693,7 +685,6 @@ class HPOProcess:
         self.time_since_last_imp = 0
         self.evaled_configs = set([])
         self.active = self.space_size >= 1
-        print("Search space size for", comp["class"], self.space_size)
         self.best_score = -np.inf
         self.best_params = None
         self.max_time_without_imp = max_time_without_imp
@@ -702,15 +693,21 @@ class HPOProcess:
         self.pool = EvaluationPool(X, y, scoring)
         self.its = 0
         
-    def evalComp(self, params):
+        # init logger
+        self.logger = logging.getLogger('naiveautoml.hpo' if logger_name is None else logger_name)
+        self.logger.info(f"Search space size for {comp['class']} is {self.space_size}")
+        
+    def get_parametrized_pipeline(self, params):
         this_step = (self.step_name, build_estimator(self.comp, params, self.X, self.y))
         steps = [s for s in self.other_step_component_instances]
         steps[self.index_in_steps] = this_step
-        print(steps)
+        return Pipeline(steps=steps)
+        
+    def evalComp(self, params):
         try:
-            return np.mean(self.pool.evaluate(Pipeline(steps=steps), timeout=self.execution_timeout))
+            return np.mean(self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout))
         except FunctionTimedOut:
-            print("TIMEOUT")
+            self.logger.info("TIMEOUT")
             return np.nan
         
     def step(self, remaining_time = None):
@@ -731,9 +728,9 @@ class HPOProcess:
         score = self.evalComp(params)
         runtime = time.time() - time_start_eval
         self.eval_runtimes.append(runtime)
-        print("Observed score of", score, "for", self.comp["class"], "with params", params)
+        self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")
         if score > self.best_score:
-            print("This is a NEW BEST SCORE!")
+            self.logger.info("This is a NEW BEST SCORE!")
             self.best_score = score
             self.time_since_last_imp = 0
             self.configs_since_last_imp = 0
@@ -742,7 +739,7 @@ class HPOProcess:
             self.configs_since_last_imp += 1
             self.time_since_last_imp += runtime
             if self.its >= self.min_its and (self.time_since_last_imp > self.max_time_without_imp or self.configs_since_last_imp > self.max_its_without_imp):
-                print("No improvement within " + str(self.time_since_last_imp) + "s or within " + str(self.max_its_without_imp) + " steps. Stopping HPO here.")
+                self.logger.info("No improvement within " + str(self.time_since_last_imp) + "s or within " + str(self.max_its_without_imp) + " steps. Stopping HPO here.")
                 self.active = False
                 return
             
@@ -751,17 +748,18 @@ class HPOProcess:
             total_expected_runtime = self.space_size * np.mean(self.eval_runtimes)
             if total_expected_runtime < np.inf and (remaining_time is None or total_expected_runtime < remaining_time):
                 self.active = False
-                print("Expected time to evaluate all configurations is only", total_expected_runtime, "Doing exhaustive search.")
+                self.logger.info(f"Expected time to evaluate all configurations is only {total_expected_runtime}. Doing exhaustive search.")
                 configs = get_all_configurations(self.config_space)
-                print("Now evaluation all " + str(len(configs)) + " possible configurations.")
+                self.logger.info(f"Now evaluation all {len(configs)} possible configurations.")
                 for params in configs:
                     score = self.evalComp(params)
-                    print("Observed score of", score, "for", self.comp["class"], "with params", params)
+                    self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")
                     if score > self.best_score:
-                        print("This is a NEW BEST SCORE!")
+                        self.logger.info("This is a NEW BEST SCORE!")
                         self.best_score = score
                         self.best_params = params
-                print("Configuration space completely exhausted.")
+                self.logger.info("Configuration space completely exhausted.")
+        return self.get_parametrized_pipeline(params), score, runtime
     
     def get_best_config(self):
         return self.best_params

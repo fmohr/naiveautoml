@@ -14,6 +14,8 @@ from sklearn.cluster import SpectralClustering
 from sklearn import metrics
 from sklearn import *
 
+from tqdm import tqdm
+
 import time
 from datetime import datetime
 
@@ -33,9 +35,11 @@ import scipy.sparse
 from naiveautoml.commons import *
 import importlib.resources as pkg_resources
 
+import logging
+
 class NaiveAutoML:
 
-    def __init__(self, search_space = None, scoring = None, num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier):
+    def __init__(self, search_space = None, scoring = None, num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False):
         
         ''' search_space is a string or a list of dictionaries
             - if it is a dict, the last one for the learner and all the others for pre-processing. Each dictionary has an entry "name" and an entry "components", which is a list of components with their parameters.
@@ -62,12 +66,25 @@ class NaiveAutoML:
         self.num_cpus = num_cpus
         self.execution_timeout = execution_timeout
         self.max_hpo_iterations = max_hpo_iterations
+        self.strictly_naive = strictly_naive
         self.timeout = timeout
+        self.show_progress = show_progress
         
         self.chosen_model = None
         self.chosen_attributes = None
         self.stage_entrypoints = {}
         self.standard_classifier = standard_classifier
+        
+        # define ordering of slots for optimization
+        if opt_ordering is None:
+            opt_ordering = ["classifier"]
+            for step in self.search_space:
+                if step["name"] != "classifier":
+                    opt_ordering.append(step["name"])
+        self.opt_ordering = opt_ordering
+        
+        ## init logger
+        self.logger = logging.getLogger('naiveautoml' if logger_name is None else logger_name)
         
     def check_combinations(self, X, y):
         
@@ -84,9 +101,8 @@ class NaiveAutoML:
             
         for combo in it.product(*algorithms_per_stage):
             pl = sklearn.pipeline.Pipeline(steps=[(names[i], clazz()) for i, clazz in enumerate(combo) if clazz is not None])
-            print(pl)
             if is_pipeline_forbidden(pl):
-                print("SKIP FORBIDDEN")
+                self.logger.debug("SKIP FORBIDDEN")
             else:
                 pool.evaluate(pl, timeout=self.execution_timeout)
                 
@@ -100,36 +116,59 @@ class NaiveAutoML:
                 params = hpo.get_best_config()
                 steps.append((step_name, build_estimator(comp, params, X, y)))
         return steps
-                
-    def build_pipeline(self, hpo_processes, X, y, verbose=False):
+    
+    def get_pipeline_for_decision_in_step(self, step_name, comp, X, y, decisions):
+        
+        if self.strictly_naive: ## strictly naive case
+            
+            # build pipeline to be evaluated here
+            if step_name == "classifier":
+                steps = [("classifier", build_estimator(comp, None, X, y))]
+            elif comp is None:
+                steps = [("classifier", self.standard_classifier())]
+            else:
+                steps = [(step_name, build_estimator(comp, None, X, y)), ("classifier", self.standard_classifier())]
+            return Pipeline(steps = steps)
+        
+        else: ## semi-naive case (consider previous decisions)
+            steps_tmp = [(s[0], build_estimator(s[1], None, X, y)) for s in decisions]
+            if comp is not None:
+                steps_tmp.append((step_name, build_estimator(comp, None, X, y)))
+            steps_ordered = []
+            for step_inner in self.search_space:
+                if is_component_defined_in_steps(steps_tmp, step_inner["name"]):
+                    steps_ordered.append(get_step_with_name(steps_tmp, step_inner["name"]))
+            return Pipeline(steps = steps_ordered)
+    
+    
+    def build_pipeline(self, hpo_processes, X, y):
         steps = self.get_instances_of_currently_selected_components_per_step(hpo_processes, X, y)
         pl = Pipeline(steps)
-        if verbose:
-            print("Original final pipeline is:", pl)
+        self.logger.debug(f"Original final pipeline is: {pl}")
         while is_pipeline_forbidden(pl):
-            if verbose:
-                print("Invalid pipeline, removing first element!")
+            self.logger.debug("Invalid pipeline, removing first element!")
             pl = Pipeline(steps=pl.steps[1:])
         return pl
     
     def choose_algorithms(self, X, y):
         
         # run over all the elements of the pipeline
-        print("--------------------------------------------------")
-        print("Choosing Algorithm for each slot")
-        print("--------------------------------------------------")
+        self.logger.info("--------------------------------------------------")
+        self.logger.info("Choosing Algorithm for each slot")
+        self.logger.info("--------------------------------------------------")
         decisions = []
         components_with_score = {}
-        best_score_overall = -np.inf
-        opt_ordering = ["classifier"]
-        for step in self.search_space:
-            if step["name"] != "classifier":
-                opt_ordering.append(step["name"])
-        for step_index, step_name in enumerate(opt_ordering):
+        
+                
+        if self.show_progress:
+            print("Progress for algorithm selection:")
+            pbar = tqdm(total=sum([len(step["components"]) for step in self.search_space]))
+                
+        for step_index, step_name in enumerate(self.opt_ordering):
             
             # create list of components to try for this slot
             step = [step for step in self.search_space if step["name"] == step_name][0]
-            print("Selecting component for step with name:", step_name)
+            self.logger.debug(f"Selecting component for step with name: {step_name}")
             if not step_name in ["classifier"]:
                 components = [None] + step["components"]
             else:
@@ -143,82 +182,72 @@ class NaiveAutoML:
                 if self.deadline is not None:
                     remaining_time = self.deadline - 10 - time.time()
                     if remaining_time is not None and remaining_time < 0:
-                        print("\tTimeout approaching. Not evaluating anymore for this stage.")
+                        self.logger.info("Timeout approaching. Not evaluating anymore for this stage.")
                         break
                     else:
-                        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Evaluating", comp["class"] if comp is not None else None, "Timeout:", self.execution_timeout, "Remaining time:", remaining_time)
+                        self.logger.info(f"Evaluating {comp['class'] if comp is not None else None}. Timeout: {self.execution_timeout}. Remaining time: {remaining_time}")
                 
-                # build pipeline to be evaluated here
-                if step_name == "classifier":
-                    steps = [("classifier", build_estimator(comp, None, X, y))]
-                elif comp is None:
-                    steps = [("classifier", self.standard_classifier())]
-                else:
-                    steps = [(step_name, build_estimator(comp, None, X, y)), ("classifier", self.standard_classifier())]
-                pl = Pipeline(steps = steps)
+                # get and evaluate pipeline for this step
+                pl = self.get_pipeline_for_decision_in_step(step_name, comp, X, y, decisions)
                 try:
-                    score = pool.evaluate(pl, self.execution_timeout, verbose=True)
+                    score = pool.evaluate(pl, self.execution_timeout)
                 except FunctionTimedOut:
-                    print("TIMEOUT!")
+                    self.logger.debug("TIMEOUT!")
                     score = np.nan
-                print("\tObserved score of", score, " for default configuration of",None if comp is None else comp["class"])
+                self.logger.debug(f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}")
+                
+                # update history
+                self.history.append({"time": time.time() - self.start_time, "pl": pl, "score_internal": score, "new_best": score > self.best_score_overall})
+                
+                # update best score
                 if not np.isnan(score) and score > best_score:
-                    print("\tThis is a NEW BEST SCORE!")
+                    self.logger.debug("This is a NEW BEST SCORE!")
                     best_score = score
                     components_with_score[step_name] = score
                     decision = comp
-                    if score > best_score_overall:
-                        print("\tUpdating new best internal pipeline to", pl)
-                        self.pl = pl
-                        self.history.append({"time": time.time() - self.start_time, "pl": pl})
+                    if score > self.best_score_overall:
+                        self.best_score_overall = score
+                        self.logger.debug(f"Updating new best internal pipeline to {pl}")
+                        self.pl = pl    
+                    
+                # update progress bar
+                if self.show_progress:
+                    pbar.update(1)
+                    
             if decision is None:
-                print("No component chosen for this slot. Leaving it blank")
+                self.logger.debug("No component chosen for this slot. Leaving it blank")
             else:
-                print("Added", decision["class"], "as the decision for step", step_name)
+                self.logger.debug(f"Added {decision['class']} as the decision for step {step_name}")
                 decisions.append((step_name, decision))
         
         # ordering decisions by their order in the pipeline
         decisions_tmp = [d for d in decisions]
         decisions = []
-        print(components_with_score)
         for step in self.search_space:
             if is_component_defined_in_steps(decisions_tmp, step["name"]):
                 decisions.append(get_step_with_name(decisions_tmp, step["name"]))
         
         self.decisions = decisions
         self.components_with_score = components_with_score
-        print("Algorithm Selection ready. Decisions:", "".join(["\n\t" + str((d[0], d[1]["class"])) + " with performance " + str(components_with_score[d[0]]) for d in decisions]))
+        self.logger.info("Algorithm Selection ready. Decisions: " + "".join(["\n\t" + str((d[0], d[1]["class"])) + " with performance " + str(components_with_score[d[0]]) for d in decisions]))
         
-
-    def fit(self, X, y):
+        # close progress bar
+        if self.show_progress:
+            pbar.close()
+    
+    def tune_parameters(self, X, y):
         
-        # initialize
-        self.pl = None
-        self.history = []
-        self.start_time = time.time()
-        self.deadline = self.start_time + self.timeout if self.timeout is not None else None
-        self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
-        if self.scoring is None:
-            self.scoring = "auc_roc" if len(np.unique(y)) == 2 else "neg_log_loss"
+        # now conduct HPO until there is no local improvement or the deadline is hit
+        self.logger.info("--------------------------------------------------")
+        self.logger.info("Entering HPO phase")
+        self.logger.info("--------------------------------------------------")
         
-        # print overview
-        for step in self.search_space:
-            print(step["name"])
-            for comp in step["components"]:
-                print("\t", comp["class"])
-        
-        # choose algorithms
-        self.choose_algorithms(X, y)
+        # read variables from state
         decisions = self.decisions
         components_with_score = self.components_with_score
-            
-        # now conduct HPO until there is no local improvement or the deadline is hit
-        print("--------------------------------------------------")
-        print("Entering HPO phase")
-        print("--------------------------------------------------")
         
         # create HPO processes for each slot, taking into account the default parametrized component of each other slot
-        hpo_processes = {}
+        self.hpo_processes = hpo_processes = {}
         step_names = [d[0] for d in decisions]
         for step_name, comp in decisions:
             if step_name == "classifier":
@@ -235,14 +264,18 @@ class NaiveAutoML:
         rs = np.random.RandomState()
         active_for_optimization = [name for name, hpo in hpo_processes.items() if hpo.active]
         round_runtimes = []
-        while active_for_optimization and (self.max_hpo_iterations is None or opt_round < self.max_hpo_iterations):
-            print("Entering optimization round " + str(opt_round))
+        if self.show_progress:
+            print("Progress for parameter turning:")
+            pbar = tqdm(total = self.max_hpo_iterations)
+            
+        while active_for_optimization and (self.max_hpo_iterations is None or opt_round <= self.max_hpo_iterations):
+            self.logger.info("Entering optimization round " + str(opt_round))
             if self.deadline is not None:
                 remaining_time = self.deadline - (np.mean(round_runtimes) if round_runtimes else 0) - 10 - time.time()
                 if remaining_time < 0:
-                    print("Timeout almost exhausted, stopping HPO phase")
+                    self.logger.info("Timeout almost exhausted, stopping HPO phase")
                     break
-                print("Remaining time is: " + str(remaining_time) + "s.")
+                self.logger.debug("Remaining time is: " + str(remaining_time) + "s.")
             else:
                 remaining_time = None
             
@@ -250,10 +283,13 @@ class NaiveAutoML:
             inactive = []
             for name in active_for_optimization:
                 hpo = hpo_processes[name]
-                print("Stepping HPO for", name)
-                hpo.step(remaining_time)
+                self.logger.debug(f"Stepping HPO for {name}")
+                pl, score, runtime = hpo.step(remaining_time)
+                if score > self.best_score_overall:
+                    self.best_score_overall = score
+                self.history.append({"time": time.time() - self.start_time, "pl": pl, "score_internal": score, "new_best": score > self.best_score_overall})
                 if not hpo.active:
-                    print("deactivating " + name)
+                    self.logger.info(f"Deactivating {name}")
                     inactive.append(name)
             round_runtimes.append(time.time() - round_start)
             for name in inactive:
@@ -261,29 +297,63 @@ class NaiveAutoML:
             opt_round += 1
             newPl = self.build_pipeline(hpo_processes, X, y)
             if str(newPl) != str(self.pl):
-                print("Updating new best internal pipeline to", newPl)
+                self.logger.info(f"Updating new best internal pipeline to {newPl}")
                 self.pl = newPl
-                self.history.append({"time": time.time() - self.start_time, "pl": newPl})
+            
+            # update progress bar
+            if self.show_progress:
+                pbar.update(1)
+         
+        # close progress bar for HPO
+        if self.show_progress:
+            pbar.close()
+        
+
+    def fit(self, X, y):
+        
+        # initialize
+        self.pl = None
+        self.best_score_overall = -np.inf
+        self.history = []
+        self.start_time = time.time()
+        self.deadline = self.start_time + self.timeout if self.timeout is not None else None
+        self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
+        if self.scoring is None:
+            self.scoring = "auc_roc" if len(np.unique(y)) == 2 else "neg_log_loss"
+        
+        # print overview
+        summary = ""
+        for step in self.search_space:
+            summary += "\n" + step["name"]
+            for comp in step["components"]:
+                summary += "\n\t" + comp['class']
+        self.logger.info(f"These are the components used by NaiveAutoML in the upcoming process (by steps):{summary}")
+        
+        # choose algorithms
+        self.choose_algorithms(X, y)
+        
+        # tune parameters
+        self.tune_parameters(X, y)
                 
         # train final pipeline
-        print("--------------------------------------------------")
-        print("Search Completed. Building final pipeline.")
-        print("--------------------------------------------------")
-        self.pl = self.build_pipeline(hpo_processes, X, y, verbose = True)
-        print(self.pl)
-        print("Now fitting the pipeline with all given data.")
+        self.logger.info("--------------------------------------------------")
+        self.logger.info("Search Completed. Building final pipeline.")
+        self.logger.info("--------------------------------------------------")
+        self.pl = self.build_pipeline(self.hpo_processes, X, y)
+        self.logger.info(self.pl)
+        self.logger.info("Now fitting the pipeline with all given data.")
         while True:
             try:
                 self.pl.fit(X, y)
                 break
             except:
-                print("There was a problem in building the pipeline, cutting it one down!")
+                self.logger.warning("There was a problem in building the pipeline, cutting it one down!")
                 self.pl = Pipeline(steps=self.pl.steps[1:])
-                print("new pipeline is:", self.pl)
+                self.logger.warning("new pipeline is:", self.pl)
             
         self.end_time = time.time()
         self.chosen_model = self.pl
-        print("Runtime was", self.end_time - self.start_time, "seconds")
+        self.logger.info(f"Runtime was {self.end_time - self.start_time} seconds")
         
     def eval_history(self, X, y):
         pool = EvaluationPool(X, y, self.scoring)

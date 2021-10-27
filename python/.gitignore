@@ -4,3 +4,4 @@
 /parallelism.ipynb
 /naiveautoml.log
 /results.csv
+naiveautoml/__pycache__/
