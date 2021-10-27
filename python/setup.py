@@ -8,11 +8,17 @@ setup(
   author = 'Felix Mohr',                   # Type in your name
   author_email = 'mail@felixmohr.de',      # Type in your E-Mail
   url = 'https://github.com/fmohr/naiveautoml',   # Provide either the link to your github or to your website
-  download_url = 'https://github.com/fmohr/naiveautoml/archive/v_01.tar.gz',    # I explain this later on
+  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.1.tar.gz',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple'],
   install_requires=[
-          'validators',
-          'beautifulsoup4',
+          'numpy',
+          'pandas',
+          'sklearn',
+          'configspace',
+          'scipy',
+          'openml',
+          'pebble',
+          'func_timeout'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',
@@ -23,4 +29,5 @@ setup(
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9'
   ],
+  package_data={'': ['searchspace.json']}
 )
