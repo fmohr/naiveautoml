@@ -26,12 +26,12 @@ Want to put limit the **number of candidates considered during hyper-parameter t
 ```python
 naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20)
 ```
-
 Want to put a **timeout**? Specify it *in seconds* (should be always bigger than 10s to avoid strange side effects).
 
 ```python
 naml = naiveautoml.NaiveAutoML(timeout=20)
 ```
+This can also be **combined** with `max_hpo_iterations`.
 
 Want to see the **progress bar** for the optimization process?
 
