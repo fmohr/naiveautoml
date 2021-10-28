@@ -1,41 +1,26 @@
+# core
 import numpy as np
-import pandas as pd
 import random
-
-import sklearn as sk
-import sklearn.ensemble
-import sklearn.decomposition
-from sklearn.pipeline import Pipeline
-from sklearn.cluster import KMeans
-from sklearn.cluster import DBSCAN
-from sklearn.mixture import GaussianMixture
-from sklearn.cluster import AgglomerativeClustering
-from sklearn.cluster import SpectralClustering
-from sklearn import metrics
-from sklearn import *
-
+import json
+import itertools as it
+import logging
+import scipy.sparse
 from tqdm import tqdm
-
 import time
-from datetime import datetime
+import importlib.resources as pkg_resources
 
+# sklearn
+import sklearn
+from sklearn import *
+from sklearn.pipeline import Pipeline
+
+# config space
 import ConfigSpace
 from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
-import json
 
-import itertools as it
-
-import os, psutil
-from func_timeout import func_timeout, FunctionTimedOut
-
-import scipy.sparse
-
-
+# naiveautoml commons
 from naiveautoml.commons import *
-import importlib.resources as pkg_resources
-
-import logging
 
 class NaiveAutoML:
 

@@ -10,3 +10,5 @@
 /autoweka-2.6.tar.gz
 /autoweka-2.6.zip
 /naiveautoml.log
+/conf/database-local-legitimacy.conf
+/conf/experiments-legitimacy.conf

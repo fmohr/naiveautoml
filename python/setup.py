@@ -2,23 +2,22 @@ from distutils.core import setup
 setup(
   name = 'naiveautoml',         # How you named your package folder (MyLib)
   packages = ['naiveautoml'],   # Chose the same as "name"
-  version = '0.0.3',      # Start with a small number and increase it with every change you make
+  version = '0.0.4',      # Start with a small number and increase it with every change you make
   license='MIT',        # Chose a license from here: https://help.github.com/articles/licensing-a-repository
   description = 'The official package for the Naive AutoML paper',   # Give a short description about your library
   author = 'Felix Mohr',                   # Type in your name
   author_email = 'mail@felixmohr.de',      # Type in your E-Mail
   url = 'https://github.com/fmohr/naiveautoml',   # Provide either the link to your github or to your website
-  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.3.tar.gz',
+  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.4.tar.gz',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple'],
   install_requires=[
           'numpy',
-          'pandas',
-          'sklearn',
+          'scikit-learn',
           'configspace',
           'scipy',
-          'openml',
-          'pebble',
-          'func_timeout'
+          'func_timeout',
+          'psutil',
+          'tqdm'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',

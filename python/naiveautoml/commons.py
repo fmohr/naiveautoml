@@ -1,57 +1,23 @@
-import openml
-import pandas as pd
-
-import sklearn as sk
-import sklearn.ensemble
-import sklearn.decomposition
-from sklearn.pipeline import Pipeline
-from sklearn.cluster import KMeans
-from sklearn.cluster import DBSCAN
-from sklearn.mixture import GaussianMixture
-from sklearn.cluster import AgglomerativeClustering
-from sklearn.cluster import SpectralClustering
-from sklearn import metrics
-from sklearn import *
-
-import pebble
-from func_timeout import func_timeout, FunctionTimedOut
+# core
+import logging, warnings
+import itertools as it
+import os, psutil
+import scipy.sparse
 import time
-from datetime import datetime
 
+# sklearn
+import sklearn
+from sklearn import *
+from sklearn.pipeline import Pipeline
+
+# timeout functions
+from func_timeout import func_timeout, FunctionTimedOut
+
+# configspace
 import ConfigSpace
 from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
-import json
 
-import logging
-import warnings
-
-import itertools as it
-
-import os, psutil
-import multiprocessing
-from concurrent.futures import TimeoutError
-
-import scipy.sparse
-
-# We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
-# because the latter is only a wrapper function, not a proper class.
-class NestablePool(multiprocessing.pool.Pool):
-	def __init__(self, *args, **kwargs):
-	    kwargs['context'] = NoDaemonContext()
-	    super(NestablePool, self).__init__(*args, **kwargs)
-
-class NoDaemonProcess(multiprocessing.Process):
-    @property
-    def daemon(self):
-        return False
-
-    @daemon.setter
-    def daemon(self, value):
-        pass
-        
-class NoDaemonContext(type(multiprocessing.get_context("spawn"))):
-	Process = NoDaemonProcess
         
 def get_class( kls ):
     parts = kls.split('.')
@@ -68,29 +34,6 @@ def is_component_defined_in_steps(steps, name):
 def get_step_with_name(steps, name):
     candidates = [s for s in steps if s[0] == name]
     return candidates[0]
-
-def get_dataset(openmlid):
-    ds = openml.datasets.get_dataset(openmlid)
-    df = ds.get_data()[0].dropna()
-    y = df[ds.default_target_attribute].values
-    
-    categorical_attributes = df.select_dtypes(exclude=['number']).columns
-    expansion_size = 1
-    for att in categorical_attributes:
-        expansion_size *= len(pd.unique(df[att]))
-        if expansion_size > 10**5:
-            break
-    
-    if expansion_size < 10**5:
-        X = pd.get_dummies(df[[c for c in df.columns if c != ds.default_target_attribute]]).values.astype(float)
-    else:
-        dfSparse = pd.get_dummies(df[[c for c in df.columns if c != ds.default_target_attribute]], sparse=True)
-        
-        X = lil_matrix(dfSparse.shape, dtype=np.float32)
-        for i, col in enumerate(dfSparse.columns):
-            ix = dfSparse[col] != 0
-            X[np.where(ix), i] = 1
-    return X, y
 
 class EvaluationPool:
 
@@ -109,14 +52,6 @@ class EvaluationPool:
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
         self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
-        
-    def merge(self, pool):
-        num_entries_before = len(self.cache)
-        for spl in pool.cache:
-            pl, learning_curve, timestamp = pool.cache[spl]
-            self.tellEvaluation(pl, learning_curve, timestamp)
-        num_entries_after = len(self.cache)
-        self.logger.info(f"Adopted {num_entries_after - num_entries_before} entries from external pool.")
 
     def tellEvaluation(self, pl, scores, timestamp):
         spl = str(pl)

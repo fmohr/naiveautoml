@@ -5,3 +5,5 @@
 /naiveautoml.log
 /results.csv
 naiveautoml/__pycache__/
+MANIFEST
+dist
