@@ -2,7 +2,7 @@
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.0.3.
+The current version is 0.0.4.
 
 Finding an optimal model for your data is then as easy as running:
 
