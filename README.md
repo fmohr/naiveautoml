@@ -2,7 +2,7 @@
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.0.3.
+The current version is 0.0.4.
 
 Finding an optimal model for your data is then as easy as running:
 
@@ -15,13 +15,13 @@ naml.fit(X, y)
 print(naml.chosen_model)
 ```
 
-To get the **history** of considered pipelines, together with a (relative) timestamp and internall validation scores, you can access the history:
+To get the **history** of considered pipelines, together with a (relative) timestamp and internal validation scores, you can access the history:
 
 ```python
 print(naml.history)
 ```
 
-Want to put limit the **number of candidates considered during hyper-parameter tuning**?
+Want to limit the **number of candidates considered during hyper-parameter tuning**?
 
 ```python
 naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20)
@@ -55,7 +55,7 @@ logger.addHandler(ch)
 ```
 
 ## Citing naive automl
-One option to cite naiveautoml is
+The current option to cite naiveautoml is
 
 ```
 @inproceedings{mohr2021replacing,
@@ -65,3 +65,5 @@ One option to cite naiveautoml is
   year={2021}
 }
 ```
+Note that the implementation deviates in some aspects from the workshop paper.
+A follow-up paper with the exact implementation used here is currently under review.
