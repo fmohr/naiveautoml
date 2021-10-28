@@ -1,6 +1,6 @@
 # naiveautoml
 
-## Why to Use?
+## Why to use?
 `naiveautoml` has significant performance advantages over other tools like auto-sklearn in the short run and is hardly outperformed in the long run.
 The following figures show average advantages of `naiveautoml` with vanilla auto-sklearn on the AutoML benchmark datasets over 24 hours (left with AUROC for binary datasets and right with cross-entropy for multi-class datasets).
 Vertical lines are visual aids for 10 minutes and 1h respectively.
