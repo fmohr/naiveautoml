@@ -1,5 +1,15 @@
 # naiveautoml
 
+## Why to use?
+`naiveautoml` has significant performance advantages over other tools like auto-sklearn in the short run and is hardly outperformed in the long run.
+The following figures show average advantages of `naiveautoml` with vanilla auto-sklearn on the AutoML benchmark datasets over 24 hours (left with AUROC for binary datasets and right with cross-entropy for multi-class datasets).
+Vertical lines are visual aids for 10 minutes and 1h respectively.
+As can be seen, `naiveautoml` is substantially better in the short run (first hour) and is not substantially outperformed in the long run.
+
+![Results for the comparison with auto-sklearn on the AutoML benchmark datasets](https://github.com/fmohr/naiveautoml/blob/master/publications/2021MLJ/plots/advantage-sklearn.jpg)
+
+Note that `naiveautoml` does not ask you for *any* parametrization (not even a timeout); it still provides you with the possibility to customize a lot of its behavior. Given our exhaustive empirical results, you can be confident that you will get at most of the times results that are comparable to what you would get with other tools.
+
 ## Python
 Install via `pip install naiveautoml.`
 The current version is 0.0.4.
@@ -48,8 +58,7 @@ logger = logging.getLogger('naiveautoml')
 logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 ```
