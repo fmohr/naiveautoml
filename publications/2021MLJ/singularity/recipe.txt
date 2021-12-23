@@ -6,7 +6,6 @@ From: ubuntu:18.04
 
 %files
 cmake-3.19.3-Linux-x86_64.sh /
-galocal.py /
 
 %environment
 
@@ -32,58 +31,50 @@ galocal.py /
 
     # update container
     apt-get update
+	
+    # prepare for python 3.8
+    apt-get -y install software-properties-common
+    add-apt-repository ppa:deadsnakes/ppa
+    
+
     apt-get install -y apt-utils
     
 
     
     #install packages
-    apt-get -y install apt-transport-https ca-certificates gnupg2 git curl build-essential systemd gcc software-properties-common swig
+    #apt-get -y install apt-transport-https ca-certificates gnupg2 git curl build-essential systemd gcc software-properties-common swig
+    apt-get -y install git
     
-    # install arrow
-    #apt-get install -y -V ca-certificates lsb-release wget
-#    wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
-#    apt-get install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
-#    apt-get update
-#    apt-get install -y -V libarrow-dev # For C++
-#    apt-get install -y -V libarrow-glib-dev # For GLib (C)
-#    apt-get install -y -V libarrow-dataset-dev # For Apache Arrow Dataset C++
-#    apt-get install -y -V libarrow-flight-dev # For Apache Arrow Flight C++
-       
     # python stuff
-    apt-get -y install python3 python3-pip
+    apt-get -y install python3.8 python3-pip
     
     # update pip
     echo "Updating pip\n------------------------------"
-    pip3 install --upgrade pip
+    LC_ALL=C.UTF-8 python3.8 -m pip install --upgrade pip
+    
+    # install GAMA
+    echo "Now installing GAMA\n-----------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install git+https://github.com/openml-labs/gama.git
+
+    # install auto-sklearn
+    echo "Now installing auto-sklearn\n------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install auto-sklearn
+
     
     # install cython, numpy and scipy
     echo "Now installing cython, numpy, and scipy\n------------------------------"
-    pip3 install cython numpy scipy
+    LC_ALL=C.UTF-8 python3.8 -m pip install cython numpy scipy
         
     # install pyarrow
     echo "Now installing pyarrow\n------------------------------"
-    pip3 install pyarrow
+    LC_ALL=C.UTF-8 python3.8 -m pip install pyarrow
+
+    # install tqdm
+    LC_ALL=C.UTF-8 python3.8 -m pip install tqdm
     
     echo "Now installing scikit-learn and openml\n------------------------------"
-    LC_ALL=C.UTF-8 pip3 install scikit-learn
-    LC_ALL=C.UTF-8 pip3 install openml
+    LC_ALL=C.UTF-8 python3.8 -m pip install scikit-learn
+    LC_ALL=C.UTF-8 python3.8 -m pip install openml
 
-    # install pebble
-    pip3 install pebble matplotlib
-
-    # install geneticalgorithm (for wrapping)
-    pip3 install geneticalgorithm
-
-    # install tpot
-    echo "Now installing tpot\n------------------------------"
-    #pip3 install tpot
-        
-    # install auto-sklearn
-    echo "Now installing auto-sklearn\n------------------------------"
-    curl https://raw.githubusercontent.com/automl/auto-sklearn/master/requirements.txt | LC_ALL=C.UTF-8 xargs -n 1 -L 1 pip3 install
-    pip3 install 'auto-sklearn==0.12.6'
-    
-
-    # install GAMA
-    echo "Now installing GAMA\n-----------------------------------"
-    pip3 install git+https://github.com/openml-labs/gama.git
+    # install pebble, matplotlib, func_timeout
+    LC_ALL=C.UTF-8 python3.8 -m pip install pebble matplotlib func_timeout

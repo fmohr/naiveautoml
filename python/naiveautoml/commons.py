@@ -9,6 +9,8 @@ import time
 import sklearn
 from sklearn import *
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import get_scorer
+
 
 # timeout functions
 from func_timeout import func_timeout, FunctionTimedOut
@@ -18,7 +20,6 @@ import ConfigSpace
 from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
 
-        
 def get_class( kls ):
     parts = kls.split('.')
     module = ".".join(parts[:-1])
@@ -37,21 +38,28 @@ def get_step_with_name(steps, name):
 
 class EvaluationPool:
 
-    def __init__(self, X, y, scoring, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01, logger_name = None):
+    def __init__(self, X, y, scoring, side_scores = None, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01, logger_name = None):
+        self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
         if X is None:
             raise Exception("Parameter X must not be None")
         if y is None:
             raise Exception("Parameter y must not be None")
-        if type(X) != np.ndarray and type(X) != scipy.sparse.csr.csr_matrix and type(X) != scipy.sparse.lil.lil_matrix:
+        if type(X) != np.ndarray and type(X) != scipy.sparse.csr.csr_matrix and type(X) != scipy.sparse.csc.csc_matrix and type(X) != scipy.sparse.lil.lil_matrix:
             raise Exception("X must be a numpy array but is " + str(type(X)))
         self.X = X
         self.y = y
         self.scoring = scoring
+        if side_scores is None:
+            self.side_scores = []
+        elif type(side_scores) == list:
+            self.side_scores = side_scores
+        else:
+            self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
+            self.side_scores = [side_scores]
         self.bestScore = -np.inf
         self.tolerance_tuning = tolerance_tuning
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
-        self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
 
     def tellEvaluation(self, pl, scores, timestamp):
         spl = str(pl)
@@ -61,18 +69,61 @@ class EvaluationPool:
             self.bestScore = score        
             self.best_spl = spl
             
-    def cross_validate(self, pl, X, y, scoring): # just a wrapper to ease parallelism
+    def cross_validate(self, pl, X, y, scorings, errors="ignore"): # just a wrapper to ease parallelism
         warnings.filterwarnings('ignore', module = 'sklearn')
         try:
-            scorer = sklearn.metrics.make_scorer(sklearn.metrics.log_loss if scoring == "neg_log_loss" else sklearn.metrics.roc_auc_score, greater_is_better = scoring != "neg_log_loss", needs_proba=True, labels=list(np.unique(y)))
-            return sklearn.model_selection.cross_validate(pl, X, y, scoring=scorer, error_score="raise")
+            if type(scorings) != list:
+                scorings = [scorings]
+            skf = sklearn.model_selection.StratifiedKFold(n_splits=5, random_state=None, shuffle=True)
+            scores = {scoring: [] for scoring in scorings}
+            for train_index, test_index in skf.split(X, y):
+                
+                X_test = X[test_index]
+                y_test = y[test_index]
+                
+                pl_copy = sklearn.base.clone(pl)
+                pl_copy.fit(X[train_index], y[train_index])
+                y_hat = pl_copy.predict(X[test_index])
+                y_prob = pl_copy.predict_proba(X[test_index])
+                labels = pl_copy.classes_
+                
+                # compute values for each metric
+                for scoring in scorings:
+                    scorer = get_scorer(scoring)
+                    if type(scorer) == sklearn.metrics._scorer._PredictScorer:
+                        try:
+                            score = get_scorer(scoring)._score_func(y_test, y_hat)
+                        except:
+                            score = np.nan
+                    elif type(scorer) == sklearn.metrics._scorer._ProbaScorer:
+                        try:
+                            score = get_scorer(scoring)._score_func(y_test, y_prob,labels=labels)
+                        except:
+                            score = np.nan
+                    elif type(scorer) == sklearn.metrics._scorer._ThresholdScorer:
+                        try:
+                            if len(labels) == 1:
+                                score = get_scorer(scoring)._score_func(y_test, y_prob[:,1])
+                            else:
+                                score = get_scorer(scoring)._score_func(y_test, y_prob, labels=labels)
+                        except:
+                            score = np.nan
+                    else:
+                        raise Exception(f"Unsupported type {type(scorer)}")
+                    if not np.isnan(score) and scoring == "neg_log_loss":
+                        score *= -1
+                    scores[scoring].append(score)
+            return scores
         except:
-            return None
+            if errors in ["message", "ignore"]:
+                return None
+            else:
+                raise
 
     def evaluate(self, pl, timeout=None, deadline=None):
         if is_pipeline_forbidden(pl):
             self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
-            return np.nan
+            return {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
         
         process = psutil.Process(os.getpid())
         self.logger.info(f"Initializing evaluation of {pl} with current memory consumption {int(process.memory_info().rss / 1024 / 1024)} MB. Now awaiting results.")
@@ -80,19 +131,20 @@ class EvaluationPool:
         start_outer = time.time()
         spl = str(pl)
         if spl in self.cache:
-            return np.round(np.mean(self.cache[spl][1]), 4)
+            out = {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
+            out[self.scoring] = np.round(np.mean(self.cache[spl][1]), 4)
+            return out
         timestamp = time.time()
         if timeout is not None:
-            result = func_timeout(timeout, self.cross_validate, (pl, self.X, self.y, self.scoring))
+            scores = func_timeout(timeout, self.cross_validate, (pl, self.X, self.y, [self.scoring] + self.side_scores))
         else:
-            result = self.cross_validate(pl, self.X, self.y, self.scoring)
-        if result is None:
-            return np.nan
-        scores = result["test_score"]
+            scores = self.cross_validate(pl, self.X, self.y, [self.scoring] + self.side_scores)
+        if scores is None:
+            return {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
         runtime = time.time() - start_outer
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
-        self.tellEvaluation(pl, scores, timestamp)
-        return np.round(np.mean(scores), 4)
+        self.tellEvaluation(pl, scores[self.scoring], timestamp)
+        return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
 
     def getBestCandidate(self):
         return self.getBestCandidates(1)[0]
@@ -604,7 +656,7 @@ sklearn.preprocessing.PowerTransformer, "classifier": sklearn.naive_bayes.Multin
 
 class HPOProcess:
     
-    def __init__(self, step_name, comp, X, y, scoring, execution_timeout, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None):
+    def __init__(self, step_name, comp, X, y, scoring, side_scores, execution_timeout, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
         self.step_name = step_name
         self.index_in_steps = index_in_steps
         self.comp = comp
@@ -625,8 +677,10 @@ class HPOProcess:
         self.max_time_without_imp = max_time_without_imp
         self.max_its_without_imp = max_its_without_imp
         self.min_its = min_its
-        self.pool = EvaluationPool(X, y, scoring)
+        self.scoring = scoring
+        self.pool = EvaluationPool(X, y, scoring, side_scores)
         self.its = 0
+        self.allow_exhaustive_search = allow_exhaustive_search
         
         # init logger
         self.logger = logging.getLogger('naiveautoml.hpo' if logger_name is None else logger_name)
@@ -640,7 +694,7 @@ class HPOProcess:
         
     def evalComp(self, params):
         try:
-            return np.mean(self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout))
+            return self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout)
         except FunctionTimedOut:
             self.logger.info("TIMEOUT")
             return np.nan
@@ -660,7 +714,8 @@ class HPOProcess:
 
         # evaluate configured pipeline
         time_start_eval = time.time()
-        score = self.evalComp(params)
+        scores = self.evalComp(params)
+        score = scores[self.scoring]
         runtime = time.time() - time_start_eval
         self.eval_runtimes.append(runtime)
         self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")
@@ -681,20 +736,21 @@ class HPOProcess:
         # check whether we do a quick exhaustive search and then disable this module
         if len(self.eval_runtimes) >= 10:
             total_expected_runtime = self.space_size * np.mean(self.eval_runtimes)
-            if total_expected_runtime < np.inf and (remaining_time is None or total_expected_runtime < remaining_time):
+            if self.allow_exhaustive_search and total_expected_runtime < np.inf and (remaining_time is None or total_expected_runtime < remaining_time):
                 self.active = False
                 self.logger.info(f"Expected time to evaluate all configurations is only {total_expected_runtime}. Doing exhaustive search.")
                 configs = get_all_configurations(self.config_space)
                 self.logger.info(f"Now evaluation all {len(configs)} possible configurations.")
                 for params in configs:
-                    score = self.evalComp(params)
+                    scores = self.evalComp(params)
+                    score = scores[self.scoring]
                     self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")
                     if score > self.best_score:
                         self.logger.info("This is a NEW BEST SCORE!")
                         self.best_score = score
                         self.best_params = params
                 self.logger.info("Configuration space completely exhausted.")
-        return self.get_parametrized_pipeline(params), score, runtime
+        return self.get_parametrized_pipeline(params), scores, runtime
     
     def get_best_config(self):
         return self.best_params

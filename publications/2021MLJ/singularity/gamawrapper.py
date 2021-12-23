@@ -15,7 +15,7 @@ from sklearn.naive_bayes import BernoulliNB
 
 from gama.utilities.generic.timekeeper import TimeKeeper
 
-from commons import *
+from experimentutils import *
 
 
 def get_gama_search_space(file):
