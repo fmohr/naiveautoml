@@ -1,5 +1,6 @@
 # core
 import numpy as np
+import pandas as pd
 import random
 import json
 import itertools as it
@@ -13,6 +14,7 @@ import importlib.resources as pkg_resources
 import sklearn
 from sklearn import *
 from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 
 # config space
 import ConfigSpace
@@ -24,7 +26,7 @@ from naiveautoml.commons import *
 
 class NaiveAutoML:
 
-    def __init__(self, search_space = None, scoring = None, side_scores = None , num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False):
+    def __init__(self, search_space = None, scoring = None, side_scores = None , num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False, sparse = False):
         
         ''' search_space is a string or a list of dictionaries
             - if it is a dict, the last one for the learner and all the others for pre-processing. Each dictionary has an entry "name" and an entry "components", which is a list of components with their parameters.
@@ -60,6 +62,10 @@ class NaiveAutoML:
         self.chosen_attributes = None
         self.stage_entrypoints = {}
         self.standard_classifier = standard_classifier
+        
+        # mandatory pre-processing steps
+        self.sparse = sparse # do one-hot encoding via sparse representations (default is False since this is not supported by all algorithms)
+        self.mandatory_pre_processing = None
         
         # define ordering of slots for optimization
         if opt_ordering is None:
@@ -115,7 +121,7 @@ class NaiveAutoML:
                 steps = [("classifier", self.standard_classifier())]
             else:
                 steps = [(step_name, build_estimator(comp, None, X, y)), ("classifier", self.standard_classifier())]
-            return Pipeline(steps = steps)
+            return Pipeline(steps = self.mandatory_pre_processing + steps)
         
         else: ## semi-naive case (consider previous decisions)
             steps_tmp = [(s[0], build_estimator(s[1], None, X, y)) for s in decisions]
@@ -125,16 +131,18 @@ class NaiveAutoML:
             for step_inner in self.search_space:
                 if is_component_defined_in_steps(steps_tmp, step_inner["name"]):
                     steps_ordered.append(get_step_with_name(steps_tmp, step_inner["name"]))
-            return Pipeline(steps = steps_ordered)
+            return Pipeline(steps = self.mandatory_pre_processing + steps_ordered)
     
     
     def build_pipeline(self, hpo_processes, X, y):
         steps = self.get_instances_of_currently_selected_components_per_step(hpo_processes, X, y)
-        pl = Pipeline(steps)
+        pl = Pipeline(self.mandatory_pre_processing + steps)
         self.logger.debug(f"Original final pipeline is: {pl}")
+        i = 0
         while is_pipeline_forbidden(pl):
+            i += 1
             self.logger.debug("Invalid pipeline, removing first element!")
-            pl = Pipeline(steps=pl.steps[1:])
+            pl = Pipeline(steps=self.mandatory_pre_processing + steps[i:])
         return pl
     
     def choose_algorithms(self, X, y):
@@ -168,6 +176,8 @@ class NaiveAutoML:
             best_score = -np.inf
             decision = None
             for comp in components:
+                if comp is not None and "MultinomialNB" in comp["class"]:
+                    continue
                 if self.deadline is not None:
                     remaining_time = self.deadline - 10 - time.time()
                     if remaining_time is not None and remaining_time < 0:
@@ -245,7 +255,7 @@ class NaiveAutoML:
             else:
                 other_instances = [(step_name, None), ("classifier", self.standard_classifier())]
             index = 0 # it is (rather by coincidence) the first step we want to optimize
-            hpo = HPOProcess(step_name, comp, X, y, self.scoring, self.side_scores, self.execution_timeout, other_instances, index, 1800, 1000, allow_exhaustive_search = (self.max_hpo_iterations is None), logger_name = self.logger_name + ".hpo")
+            hpo = HPOProcess(step_name, comp, X, y, self.scoring, self.side_scores, self.execution_timeout, self.mandatory_pre_processing, other_instances, index, 1800, 1000, allow_exhaustive_search = (self.max_hpo_iterations is None), logger_name = self.logger_name + ".hpo")
             hpo.best_score = components_with_score[step_name] # performance of default config
             hpo_processes[step_name] = hpo
         
@@ -287,8 +297,9 @@ class NaiveAutoML:
                             inactive.append(name)
                 except KeyboardInterrupt:
                     raise
-                except:
-                    print("An error occurred in the HPO step")
+                except Exception as e:
+                    self.logger.error(f"An error occurred in the HPO step: {e}")
+                    
             round_runtimes.append(time.time() - round_start)
             for name in inactive:
                 active_for_optimization.remove(name)
@@ -318,6 +329,29 @@ class NaiveAutoML:
         self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
         if self.scoring is None:
             self.scoring = "auc_roc" if len(np.unique(y)) == 2 else "neg_log_loss"
+            
+        # determine fixed pre-processing steps for imputation and binarization
+        types = [set([type(v) for v in r]) for r in X.T]
+        numeric_features = [c for c, t in enumerate(types) if len(t) == 1 and list(t)[0] != str]
+        numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
+        categorical_features = [i for i in range(X.shape[1]) if i not in numeric_features]
+        missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
+        self.logger.info(f"There are {len(categorical_features)} categorical features, which will be binarized.")
+        self.logger.info(f"Missing values for the different attributes are {missing_values_per_feature}.")
+        if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
+            categorical_transformer = Pipeline([
+                ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
+                ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse = self.sparse)),
+
+            ])
+            self.mandatory_pre_processing = [("impute_and_binarize", ColumnTransformer(
+                transformers=[
+                    ("num", numeric_transformer, numeric_features),
+                    ("cat", categorical_transformer, categorical_features),
+                ]
+            ))]
+        else:
+            self.mandatory_pre_processing = []
         
         # print overview
         summary = ""

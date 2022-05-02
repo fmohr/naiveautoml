@@ -69,7 +69,7 @@ class EvaluationPool:
             self.bestScore = score        
             self.best_spl = spl
             
-    def cross_validate(self, pl, X, y, scorings, errors="ignore"): # just a wrapper to ease parallelism
+    def cross_validate(self, pl, X, y, scorings, errors="message"): # just a wrapper to ease parallelism
         warnings.filterwarnings('ignore', module = 'sklearn')
         try:
             if type(scorings) != list:
@@ -114,8 +114,10 @@ class EvaluationPool:
                         score *= -1
                     scores[scoring].append(score)
             return scores
-        except:
+        except Exception as e:
             if errors in ["message", "ignore"]:
+                if errors == "message":
+                    self.logger.error(f"Observed an error: {e}")
                 return None
             else:
                 raise
@@ -656,12 +658,13 @@ sklearn.preprocessing.PowerTransformer, "classifier": sklearn.naive_bayes.Multin
 
 class HPOProcess:
     
-    def __init__(self, step_name, comp, X, y, scoring, side_scores, execution_timeout, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
+    def __init__(self, step_name, comp, X, y, scoring, side_scores, execution_timeout, mandatory_pre_processing, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
         self.step_name = step_name
         self.index_in_steps = index_in_steps
         self.comp = comp
         self.X = X
         self.y = y
+        self.mandatory_pre_processing = mandatory_pre_processing
         self.other_step_component_instances = other_step_component_instances
         self.execution_timeout = execution_timeout
         config_space_as_string = comp["params"]
@@ -690,7 +693,7 @@ class HPOProcess:
         this_step = (self.step_name, build_estimator(self.comp, params, self.X, self.y))
         steps = [s for s in self.other_step_component_instances]
         steps[self.index_in_steps] = this_step
-        return Pipeline(steps=steps)
+        return Pipeline(steps=self.mandatory_pre_processing + steps)
         
     def evalComp(self, params):
         try:
