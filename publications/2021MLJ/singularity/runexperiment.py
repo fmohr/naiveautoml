@@ -111,7 +111,8 @@ def get_learner(args,  X_train, y_train, scoring):
             standard_classifier=sklearn.neighbors.KNeighborsClassifier,
             show_progress = False,
             opt_ordering = None,
-            strictly_naive=strictly_naive)
+            strictly_naive=strictly_naive,
+            sparse = True)
     
     raise ValueError(f"No factory for learner {name}")
 
