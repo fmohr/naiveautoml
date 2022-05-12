@@ -2,9 +2,10 @@
 
 ## Why to use?
 `naiveautoml` has significant performance advantages over other tools like auto-sklearn in the short run and is hardly outperformed in the long run.
-The following figures show average advantages of `naiveautoml` with vanilla auto-sklearn on the AutoML benchmark datasets over 24 hours (left with AUROC for binary datasets and right with cross-entropy for multi-class datasets).
+The following figures show average advantages of `naiveautoml` with vanilla auto-sklearn on the AutoML benchmark datasets over 24 hours (here for mean advantage in cross-entropy over 62 datasets); positive values indicate that `naiveautoml` is better than another approach.
 Vertical lines are visual aids for 10 minutes and 1h respectively.
-As can be seen, `naiveautoml` is substantially better in the short run (first hour) and is not substantially outperformed in the long run.
+As can be seen, `naiveautoml` is substantially better in the short run (first hour) than both `autosklearn` and a `random search` and is not substantially outperformed in the long run.
+It is slightly outperformed by random forests in the (very) short run but outperforms random forests in the long run.
 
 ![Results for the comparison with auto-sklearn on the AutoML benchmark datasets](https://github.com/fmohr/naiveautoml/blob/master/publications/2022MLJ/plots/advantages.jpg)
 
@@ -12,7 +13,7 @@ Note that `naiveautoml` does not ask you for *any* parametrization (not even a t
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.0.4.
+The current version is 0.0.8.
 
 Finding an optimal model for your data is then as easy as running:
 
