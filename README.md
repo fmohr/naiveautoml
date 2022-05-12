@@ -6,7 +6,7 @@ The following figures show average advantages of `naiveautoml` with vanilla auto
 Vertical lines are visual aids for 10 minutes and 1h respectively.
 As can be seen, `naiveautoml` is substantially better in the short run (first hour) and is not substantially outperformed in the long run.
 
-![Results for the comparison with auto-sklearn on the AutoML benchmark datasets](https://github.com/fmohr/naiveautoml/blob/master/publications/2021MLJ/plots/advantage-sklearn.jpg)
+![Results for the comparison with auto-sklearn on the AutoML benchmark datasets](https://github.com/fmohr/naiveautoml/blob/master/publications/2021MLJ/plots/advantages.jpg)
 
 Note that `naiveautoml` does not ask you for *any* parametrization (not even a timeout); it still provides you with the possibility to customize a lot of its behavior. Given our exhaustive empirical results, you can be confident that you will get at most of the times results that are comparable to what you would get with other tools.
 
