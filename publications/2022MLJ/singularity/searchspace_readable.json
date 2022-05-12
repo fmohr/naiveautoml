@@ -1,0 +1,1142 @@
+[
+    {
+        "name": "data-pre-processor",
+        "components": [
+            {
+                "name": "sklearn.preprocessing.MinMaxScaler",
+                "params": []
+            },
+            {
+                "name": "sklearn.preprocessing.Normalizer",
+                "params": []
+            },
+            {
+                "name": "sklearn.preprocessing.PowerTransformer",
+                "params": []
+            },
+            {
+                "name": "sklearn.preprocessing.QuantileTransformer",
+                "params": [
+                    {
+                        "name": "n_quantiles",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 10,
+                        "upper": 2000,
+                        "default": 1000
+                    },
+                    {
+                        "name": "output_distribution",
+                        "type": "categorical",
+                        "choices": [
+                            "uniform",
+                            "normal"
+                        ],
+                        "default": "uniform",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.preprocessing.RobustScaler",
+                "params": [
+                    {
+                        "name": "q_max",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.7,
+                        "upper": 0.999,
+                        "default": 0.75
+                    },
+                    {
+                        "name": "q_min",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.001,
+                        "upper": 0.3,
+                        "default": 0.25
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.preprocessing.StandardScaler",
+                "params": []
+            },
+            {
+                "name": "sklearn.feature_selection.VarianceThreshold",
+                "params": []
+            }
+        ]
+    },
+    {
+        "name": "feature-pre-processor",
+        "components": [
+            {
+                "name": "sklearn.decomposition.FastICA",
+                "params": [
+                    {
+                        "name": "algorithm",
+                        "type": "categorical",
+                        "choices": [
+                            "parallel",
+                            "deflation"
+                        ],
+                        "default": "parallel",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "fun",
+                        "type": "categorical",
+                        "choices": [
+                            "logcosh",
+                            "exp",
+                            "cube"
+                        ],
+                        "default": "logcosh",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "whiten",
+                        "type": "categorical",
+                        "choices": [
+                            "False",
+                            "True"
+                        ],
+                        "default": "False",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "n_components",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 10,
+                        "upper": 2000,
+                        "default": 100
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.cluster.FeatureAgglomeration",
+                "params": [
+                    {
+                        "name": "affinity",
+                        "type": "categorical",
+                        "choices": [
+                            "euclidean",
+                            "manhattan",
+                            "cosine"
+                        ],
+                        "default": "euclidean",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "linkage",
+                        "type": "categorical",
+                        "choices": [
+                            "ward",
+                            "complete",
+                            "average"
+                        ],
+                        "default": "ward",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "n_clusters",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 400,
+                        "default": 25
+                    },
+                    {
+                        "name": "pooling_func",
+                        "type": "categorical",
+                        "choices": [
+                            "mean",
+                            "median",
+                            "max"
+                        ],
+                        "default": "mean",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.decomposition.KernelPCA",
+                "params": [
+                    {
+                        "name": "kernel",
+                        "type": "categorical",
+                        "choices": [
+                            "poly",
+                            "rbf",
+                            "sigmoid",
+                            "cosine"
+                        ],
+                        "default": "rbf",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "n_components",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 10,
+                        "upper": 2000,
+                        "default": 100
+                    },
+                    {
+                        "name": "coef0",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": -1.0,
+                        "upper": 1.0,
+                        "default": 0.0
+                    },
+                    {
+                        "name": "degree",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 5,
+                        "default": 3
+                    },
+                    {
+                        "name": "gamma",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 3.0517578125e-05,
+                        "upper": 8.0,
+                        "default": 0.01
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.kernel_approximation.RBFSampler",
+                "params": [
+                    {
+                        "name": "gamma",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 3.0517578125e-05,
+                        "upper": 8.0,
+                        "default": 1.0
+                    },
+                    {
+                        "name": "n_components",
+                        "type": "uniform_int",
+                        "log": true,
+                        "lower": 50,
+                        "upper": 10000,
+                        "default": 100
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.kernel_approximation.Nystroem",
+                "params": [
+                    {
+                        "name": "kernel",
+                        "type": "categorical",
+                        "choices": [
+                            "poly",
+                            "rbf",
+                            "sigmoid",
+                            "cosine",
+                            "chi2"
+                        ],
+                        "default": "rbf",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "n_components",
+                        "type": "uniform_int",
+                        "log": true,
+                        "lower": 50,
+                        "upper": 10000,
+                        "default": 100
+                    },
+                    {
+                        "name": "coef0",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": -1.0,
+                        "upper": 1.0,
+                        "default": 0.0
+                    },
+                    {
+                        "name": "degree",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 5,
+                        "default": 3
+                    },
+                    {
+                        "name": "gamma",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 3.0517578125e-05,
+                        "upper": 8.0,
+                        "default": 0.1
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.decomposition.PCA",
+                "params": [
+                    {
+                        "name": "keep_variance",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.5,
+                        "upper": 0.9999,
+                        "default": 0.9999
+                    },
+                    {
+                        "name": "whiten",
+                        "type": "categorical",
+                        "choices": [
+                            "False",
+                            "True"
+                        ],
+                        "default": "False",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.preprocessing.PolynomialFeatures",
+                "params": [
+                    {
+                        "name": "degree",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 3,
+                        "default": 2
+                    },
+                    {
+                        "name": "include_bias",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "interaction_only",
+                        "type": "categorical",
+                        "choices": [
+                            "False",
+                            "True"
+                        ],
+                        "default": "False",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.feature_selection.SelectPercentile",
+                "params": [
+                    {
+                        "name": "percentile",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 1.0,
+                        "upper": 99.0,
+                        "default": 50.0
+                    },
+                    {
+                        "name": "score_func",
+                        "type": "categorical",
+                        "choices": [
+                            "chi2",
+                            "f_classif",
+                            "mutual_info"
+                        ],
+                        "default": "chi2",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.feature_selection.GenericUnivariateSelect",
+                "params": [
+                    {
+                        "name": "alpha",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.01,
+                        "upper": 0.5,
+                        "default": 0.1
+                    },
+                    {
+                        "name": "score_func",
+                        "type": "categorical",
+                        "choices": [
+                            "chi2",
+                            "f_classif",
+                            "mutual_info_classif"
+                        ],
+                        "default": "chi2",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "mode",
+                        "type": "categorical",
+                        "choices": [
+                            "fpr",
+                            "fdr",
+                            "fwe"
+                        ],
+                        "default": "fpr",
+                        "probabilities": null
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "name": "classifier",
+        "components": [
+            {
+                "name": "sklearn.naive_bayes.BernoulliNB",
+                "params": [
+                    {
+                        "name": "alpha",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.01,
+                        "upper": 100.0,
+                        "default": 1.0
+                    },
+                    {
+                        "name": "fit_prior",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.tree.DecisionTreeClassifier",
+                "params": [
+                    {
+                        "name": "criterion",
+                        "type": "categorical",
+                        "choices": [
+                            "gini",
+                            "entropy"
+                        ],
+                        "default": "gini",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "max_depth_factor",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.0,
+                        "upper": 2.0,
+                        "default": 0.5
+                    },
+                    {
+                        "name": "max_features",
+                        "type": "constant",
+                        "value": 1.0
+                    },
+                    {
+                        "name": "max_leaf_nodes",
+                        "type": "constant",
+                        "value": "None"
+                    },
+                    {
+                        "name": "min_impurity_decrease",
+                        "type": "constant",
+                        "value": 0.0
+                    },
+                    {
+                        "name": "min_samples_leaf",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 1,
+                        "upper": 20,
+                        "default": 1
+                    },
+                    {
+                        "name": "min_samples_split",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 20,
+                        "default": 2
+                    },
+                    {
+                        "name": "min_weight_fraction_leaf",
+                        "type": "constant",
+                        "value": 0.0
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.ensemble.ExtraTreesClassifier",
+                "params": [
+                    {
+                        "name": "bootstrap",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "False",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "criterion",
+                        "type": "categorical",
+                        "choices": [
+                            "gini",
+                            "entropy"
+                        ],
+                        "default": "gini",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "max_depth",
+                        "type": "constant",
+                        "value": "None"
+                    },
+                    {
+                        "name": "max_features",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.0,
+                        "upper": 1.0,
+                        "default": 0.5
+                    },
+                    {
+                        "name": "max_leaf_nodes",
+                        "type": "constant",
+                        "value": "None"
+                    },
+                    {
+                        "name": "min_impurity_decrease",
+                        "type": "constant",
+                        "value": 0.0
+                    },
+                    {
+                        "name": "min_samples_leaf",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 1,
+                        "upper": 20,
+                        "default": 1
+                    },
+                    {
+                        "name": "min_samples_split",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 20,
+                        "default": 2
+                    },
+                    {
+                        "name": "min_weight_fraction_leaf",
+                        "type": "constant",
+                        "value": 0.0
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.naive_bayes.GaussianNB",
+                "params": []
+            },
+            {
+                "name": "sklearn.ensemble.GradientBoostingClassifier",
+                "params": [
+                    {
+                        "name": "early_stop",
+                        "type": "categorical",
+                        "choices": [
+                            "off",
+                            "valid",
+                            "train"
+                        ],
+                        "default": "off",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "l2_regularization",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 1e-10,
+                        "upper": 1.0,
+                        "default": 1e-10
+                    },
+                    {
+                        "name": "learning_rate",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.01,
+                        "upper": 1.0,
+                        "default": 0.1
+                    },
+                    {
+                        "name": "loss",
+                        "type": "constant",
+                        "value": "auto"
+                    },
+                    {
+                        "name": "max_bins",
+                        "type": "constant",
+                        "value": 255
+                    },
+                    {
+                        "name": "max_depth",
+                        "type": "constant",
+                        "value": "None"
+                    },
+                    {
+                        "name": "max_leaf_nodes",
+                        "type": "uniform_int",
+                        "log": true,
+                        "lower": 3,
+                        "upper": 2047,
+                        "default": 31
+                    },
+                    {
+                        "name": "min_samples_leaf",
+                        "type": "uniform_int",
+                        "log": true,
+                        "lower": 1,
+                        "upper": 200,
+                        "default": 20
+                    },
+                    {
+                        "name": "scoring",
+                        "type": "constant",
+                        "value": "loss"
+                    },
+                    {
+                        "name": "tol",
+                        "type": "constant",
+                        "value": 1e-07
+                    },
+                    {
+                        "name": "n_iter_no_change",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 1,
+                        "upper": 20,
+                        "default": 10
+                    },
+                    {
+                        "name": "validation_fraction",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.01,
+                        "upper": 0.4,
+                        "default": 0.1
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.neighbors.KNeighborsClassifier",
+                "params": [
+                    {
+                        "name": "n_neighbors",
+                        "type": "uniform_int",
+                        "log": true,
+                        "lower": 1,
+                        "upper": 100,
+                        "default": 1
+                    },
+                    {
+                        "name": "p",
+                        "type": "categorical",
+                        "choices": [
+                            1,
+                            2
+                        ],
+                        "default": 2,
+                        "probabilities": null
+                    },
+                    {
+                        "name": "weights",
+                        "type": "categorical",
+                        "choices": [
+                            "uniform",
+                            "distance"
+                        ],
+                        "default": "uniform",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.discriminant_analysis.LinearDiscriminantAnalysis",
+                "params": [
+                    {
+                        "name": "shrinkage",
+                        "type": "categorical",
+                        "choices": [
+                            "None",
+                            "auto",
+                            "manual"
+                        ],
+                        "default": "None",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "tol",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 1e-05,
+                        "upper": 0.1,
+                        "default": 0.0001
+                    },
+                    {
+                        "name": "shrinkage_factor",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.0,
+                        "upper": 1.0,
+                        "default": 0.5
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.svm.SVC",
+                "params": [
+                    {
+                        "name": "C",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.03125,
+                        "upper": 32768.0,
+                        "default": 1.0
+                    },
+                    {
+                        "name": "gamma",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 3.0517578125e-05,
+                        "upper": 8.0,
+                        "default": 0.1
+                    },
+                    {
+                        "name": "kernel",
+                        "type": "constant",
+                        "value": "linear"
+                    },
+                    {
+                        "name": "max_iter",
+                        "type": "constant",
+                        "value": -1
+                    },
+                    {
+                        "name": "shrinking",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "tol",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 1e-05,
+                        "upper": 0.1,
+                        "default": 0.001
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.svm.SVC",
+                "params": [
+                    {
+                        "name": "C",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.03125,
+                        "upper": 32768.0,
+                        "default": 1.0
+                    },
+                    {
+                        "name": "gamma",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 3.0517578125e-05,
+                        "upper": 8.0,
+                        "default": 0.1
+                    },
+                    {
+                        "name": "kernel",
+                        "type": "constant",
+                        "value": "rbf"
+                    },
+                    {
+                        "name": "max_iter",
+                        "type": "constant",
+                        "value": -1
+                    },
+                    {
+                        "name": "shrinking",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "tol",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 1e-05,
+                        "upper": 0.1,
+                        "default": 0.001
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.svm.SVC",
+                "params": [
+                    {
+                        "name": "C",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.03125,
+                        "upper": 32768.0,
+                        "default": 1.0
+                    },
+                    {
+                        "name": "coef0",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": -1.0,
+                        "upper": 1.0,
+                        "default": 0.0
+                    },
+                    {
+                        "name": "degree",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 5,
+                        "default": 3
+                    },
+                    {
+                        "name": "gamma",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 3.0517578125e-05,
+                        "upper": 8.0,
+                        "default": 0.1
+                    },
+                    {
+                        "name": "kernel",
+                        "type": "constant",
+                        "value": "poly"
+                    },
+                    {
+                        "name": "max_iter",
+                        "type": "constant",
+                        "value": -1
+                    },
+                    {
+                        "name": "shrinking",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "tol",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 1e-05,
+                        "upper": 0.1,
+                        "default": 0.001
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.svm.SVC",
+                "params": [
+                    {
+                        "name": "C",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.03125,
+                        "upper": 32768.0,
+                        "default": 1.0
+                    },
+                    {
+                        "name": "coef0",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": -1.0,
+                        "upper": 1.0,
+                        "default": 0.0
+                    },
+                    {
+                        "name": "gamma",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 3.0517578125e-05,
+                        "upper": 8.0,
+                        "default": 0.1
+                    },
+                    {
+                        "name": "kernel",
+                        "type": "constant",
+                        "value": "sigmoid"
+                    },
+                    {
+                        "name": "max_iter",
+                        "type": "constant",
+                        "value": -1
+                    },
+                    {
+                        "name": "shrinking",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "tol",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 1e-05,
+                        "upper": 0.1,
+                        "default": 0.001
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.neural_network.MLPClassifier",
+                "params": [
+                    {
+                        "name": "activation",
+                        "type": "categorical",
+                        "choices": [
+                            "tanh",
+                            "relu"
+                        ],
+                        "default": "relu",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "alpha",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 1e-07,
+                        "upper": 0.1,
+                        "default": 0.0001
+                    },
+                    {
+                        "name": "batch_size",
+                        "type": "constant",
+                        "value": "auto"
+                    },
+                    {
+                        "name": "beta_1",
+                        "type": "constant",
+                        "value": 0.9
+                    },
+                    {
+                        "name": "beta_2",
+                        "type": "constant",
+                        "value": 0.999
+                    },
+                    {
+                        "name": "early_stopping",
+                        "type": "categorical",
+                        "choices": [
+                            "valid",
+                            "train"
+                        ],
+                        "default": "valid",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "epsilon",
+                        "type": "constant",
+                        "value": 1e-08
+                    },
+                    {
+                        "name": "hidden_layer_depth",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 1,
+                        "upper": 3,
+                        "default": 1
+                    },
+                    {
+                        "name": "learning_rate_init",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.0001,
+                        "upper": 0.5,
+                        "default": 0.001
+                    },
+                    {
+                        "name": "n_iter_no_change",
+                        "type": "constant",
+                        "value": 32
+                    },
+                    {
+                        "name": "num_nodes_per_layer",
+                        "type": "uniform_int",
+                        "log": true,
+                        "lower": 16,
+                        "upper": 264,
+                        "default": 32
+                    },
+                    {
+                        "name": "shuffle",
+                        "type": "constant",
+                        "value": "True"
+                    },
+                    {
+                        "name": "solver",
+                        "type": "constant",
+                        "value": "adam"
+                    },
+                    {
+                        "name": "tol",
+                        "type": "constant",
+                        "value": 0.0001
+                    },
+                    {
+                        "name": "validation_fraction",
+                        "type": "constant",
+                        "value": 0.1
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.naive_bayes.MultinomialNB",
+                "params": [
+                    {
+                        "name": "alpha",
+                        "type": "uniform_float",
+                        "log": true,
+                        "lower": 0.01,
+                        "upper": 100.0,
+                        "default": 1.0
+                    },
+                    {
+                        "name": "fit_prior",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis",
+                "params": [
+                    {
+                        "name": "reg_param",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.0,
+                        "upper": 1.0,
+                        "default": 0.0
+                    }
+                ]
+            },
+            {
+                "name": "sklearn.ensemble.RandomForestClassifier",
+                "params": [
+                    {
+                        "name": "bootstrap",
+                        "type": "categorical",
+                        "choices": [
+                            "True",
+                            "False"
+                        ],
+                        "default": "True",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "criterion",
+                        "type": "categorical",
+                        "choices": [
+                            "gini",
+                            "entropy"
+                        ],
+                        "default": "gini",
+                        "probabilities": null
+                    },
+                    {
+                        "name": "max_depth",
+                        "type": "constant",
+                        "value": "None"
+                    },
+                    {
+                        "name": "max_features",
+                        "type": "uniform_float",
+                        "log": false,
+                        "lower": 0.0,
+                        "upper": 1.0,
+                        "default": 0.5
+                    },
+                    {
+                        "name": "max_leaf_nodes",
+                        "type": "constant",
+                        "value": "None"
+                    },
+                    {
+                        "name": "min_impurity_decrease",
+                        "type": "constant",
+                        "value": 0.0
+                    },
+                    {
+                        "name": "min_samples_leaf",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 1,
+                        "upper": 20,
+                        "default": 1
+                    },
+                    {
+                        "name": "min_samples_split",
+                        "type": "uniform_int",
+                        "log": false,
+                        "lower": 2,
+                        "upper": 20,
+                        "default": 2
+                    },
+                    {
+                        "name": "min_weight_fraction_leaf",
+                        "type": "constant",
+                        "value": 0.0
+                    }
+                ]
+            }
+        ]
+    }
+]

@@ -1,0 +1,11 @@
+.ipynb_checkpoints
+__pycache__
+/.classpath
+/.settings/
+/bin/
+/.gradle/
+build
+logs
+.project
+results.csv
+gridsearch.csv

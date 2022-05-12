@@ -6,9 +6,9 @@ import json
 import itertools as it
 import logging
 import scipy.sparse
-from tqdm import tqdm
+#from tqdm import tqdm
 import time
-import importlib.resources as pkg_resources
+#import importlib.resources as pkg_resources
 
 # sklearn
 import sklearn
@@ -189,10 +189,10 @@ class NaiveAutoML:
                 # get and evaluate pipeline for this step
                 pl = self.get_pipeline_for_decision_in_step(step_name, comp, X, y, decisions)
                 try:
-                    scores = pool.evaluate(pl, min(self.execution_timeout, remaining_time))
+                    scores = pool.evaluate(pl, min(self.execution_timeout, remaining_time if self.deadline is not None else 10**10))
                 except FunctionTimedOut:
                     self.logger.debug("TIMEOUT!")
-                    scores = {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
+                    scores = {scoring: np.nan for scoring in [self.scoring] + (self.side_scores if self.side_scores is not None else [])}
                 score = scores[self.scoring]
                 self.logger.debug(f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}")
                 
@@ -299,6 +299,7 @@ class NaiveAutoML:
                     raise
                 except Exception as e:
                     self.logger.error(f"An error occurred in the HPO step: {e}")
+                    raise
                     
             round_runtimes.append(time.time() - round_start)
             for name in inactive:
@@ -328,7 +329,7 @@ class NaiveAutoML:
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
         self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
         if self.scoring is None:
-            self.scoring = "auc_roc" if len(np.unique(y)) == 2 else "neg_log_loss"
+            self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
             
         # determine fixed pre-processing steps for imputation and binarization
         types = [set([type(v) for v in r]) for r in X.T]

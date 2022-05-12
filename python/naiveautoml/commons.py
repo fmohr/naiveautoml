@@ -69,7 +69,7 @@ class EvaluationPool:
             self.bestScore = score        
             self.best_spl = spl
             
-    def cross_validate(self, pl, X, y, scorings, errors="message"): # just a wrapper to ease parallelism
+    def cross_validate(self, pl, X, y, scorings, errors="raise"): # just a wrapper to ease parallelism
         warnings.filterwarnings('ignore', module = 'sklearn')
         try:
             if type(scorings) != list:
@@ -685,6 +685,14 @@ class HPOProcess:
         self.its = 0
         self.allow_exhaustive_search = allow_exhaustive_search
         
+        if side_scores is None:
+            self.side_scores = []
+        elif type(side_scores) == list:
+            self.side_scores = side_scores
+        else:
+            self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
+            self.side_scores = [side_scores]
+        
         # init logger
         self.logger = logging.getLogger('naiveautoml.hpo' if logger_name is None else logger_name)
         self.logger.info(f"Search space size for {comp['class']} is {self.space_size}")
@@ -700,7 +708,7 @@ class HPOProcess:
             return self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout)
         except FunctionTimedOut:
             self.logger.info("TIMEOUT")
-            return np.nan
+            return {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
         
     def step(self, remaining_time = None):
         self.its += 1
@@ -718,6 +726,8 @@ class HPOProcess:
         # evaluate configured pipeline
         time_start_eval = time.time()
         scores = self.evalComp(params)
+        if type(scores) != dict:
+            raise ValueError(f"The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}")
         score = scores[self.scoring]
         runtime = time.time() - time_start_eval
         self.eval_runtimes.append(runtime)

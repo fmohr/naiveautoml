@@ -1,0 +1,80 @@
+Bootstrap: docker
+From: ubuntu:18.04
+
+%runscript
+    exec echo "The runscript is the containers default runtime command!"
+
+%files
+cmake-3.19.3-Linux-x86_64.sh /
+
+%environment
+
+%labels
+    Maintainer fmohr
+
+%post
+
+    ls -lh /
+    ls -lh /tmp
+    
+    pwd
+    whoami
+    
+    ls -lh
+    
+    # install cmake (required for TPOT)
+    chmod +x /cmake-3.19.3-Linux-x86_64.sh
+    /cmake-3.19.3-Linux-x86_64.sh --skip-license
+    ln -s /opt/cmake-3.19.3/bin/* /usr/local/bin
+    echo "CMake installation finished. Now testing version"
+    cmake --version
+
+    # update container
+    apt-get update
+	
+    # prepare for python 3.8
+    apt-get -y install software-properties-common
+    add-apt-repository ppa:deadsnakes/ppa
+    
+
+    apt-get install -y apt-utils
+    
+
+    
+    #install packages
+    #apt-get -y install apt-transport-https ca-certificates gnupg2 git curl build-essential systemd gcc software-properties-common swig
+    apt-get -y install git
+    
+    # python stuff
+    apt-get -y install python3.8 python3-pip
+    
+    # update pip
+    echo "Updating pip\n------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install --upgrade pip
+    
+    # install GAMA
+    echo "Now installing GAMA\n-----------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install git+https://github.com/openml-labs/gama.git
+
+    # install auto-sklearn
+    echo "Now installing auto-sklearn\n------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install auto-sklearn
+
+    
+    # install cython, numpy and scipy
+    echo "Now installing cython, numpy, and scipy\n------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install cython numpy scipy
+        
+    # install pyarrow
+    echo "Now installing pyarrow\n------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install pyarrow
+
+    # install tqdm
+    LC_ALL=C.UTF-8 python3.8 -m pip install tqdm
+    
+    echo "Now installing scikit-learn and openml\n------------------------------"
+    LC_ALL=C.UTF-8 python3.8 -m pip install scikit-learn
+    LC_ALL=C.UTF-8 python3.8 -m pip install openml
+
+    # install pebble, matplotlib, func_timeout
+    LC_ALL=C.UTF-8 python3.8 -m pip install pebble matplotlib func_timeout
