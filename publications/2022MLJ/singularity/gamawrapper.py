@@ -17,6 +17,29 @@ from gama.utilities.generic.timekeeper import TimeKeeper
 
 from experimentutils import *
 
+def get_mandatory_preprocessing(X, y):
+    
+    # determine fixed pre-processing steps for imputation and binarization (naml does this automatically)
+    types = [set([type(v) for v in r]) for r in X.T]
+    numeric_features = [c for c, t in enumerate(types) if len(t) == 1 and list(t)[0] != str]
+    numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
+    categorical_features = [i for i in range(X.shape[1]) if i not in numeric_features]
+    missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
+    if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
+        categorical_transformer = Pipeline([
+            ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
+            ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse = True)),
+
+        ])
+        mandatory_pre_processing = [("impute_and_binarize", ColumnTransformer(
+            transformers=[
+                ("num", numeric_transformer, numeric_features),
+                ("cat", categorical_transformer, categorical_features),
+            ]
+        ))]
+    else:
+        mandatory_pre_processing = []
+    return mandatory_pre_processing
 
 def get_gama_search_space(file):
     f = open(file)
@@ -129,12 +152,17 @@ def fit_patched(self, x, y, warm_start = None):
                 )
             )
         )
+        
+        mandatory_pre_processing = get_mandatory_preprocessing(x, y)
+        
+        for ind in best_individuals:
+            ind.pipeline = Pipeline(mandatory_pre_processing + ind.pipeline.steps)
         self._post_processing.dynamic_defaults(self)
         self.model = self._post_processing.post_process(
             self._x,
             self._y,
             self._time_manager.total_time_remaining,
-            best_individuals,
+                best_individuals,
         )
     if not self._store == "all":
         to_clean = dict(nothing="all", logs="evaluations", models="logs")

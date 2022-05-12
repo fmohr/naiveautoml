@@ -8,4 +8,4 @@ build
 logs
 .project
 results.csv
-gridsearch.csv
+gridsearchresults.csv

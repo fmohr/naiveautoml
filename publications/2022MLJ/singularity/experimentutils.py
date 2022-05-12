@@ -8,10 +8,12 @@ from naiveautoml.commons import *
 import json
 import sklearn
 from sklearn import *
-from scipy.sparse import lil_matrix
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+
 import itertools as it
 
-from tqdm import tqdm
+#from tqdm import tqdm
 
 import random
 import logging
@@ -53,6 +55,30 @@ class PipelineSampler:
             choice_in_step.extend(step["components"])
             choices.append(choice_in_step)
         self.pl_choices = list(it.product(*choices))
+        
+
+        
+        
+        # determine fixed pre-processing steps for imputation and binarization
+        types = [set([type(v) for v in r]) for r in X.T]
+        numeric_features = [c for c, t in enumerate(types) if len(t) == 1 and list(t)[0] != str]
+        numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
+        categorical_features = [i for i in range(X.shape[1]) if i not in numeric_features]
+        missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
+        if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
+            categorical_transformer = Pipeline([
+                ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
+                ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse = True)),
+
+            ])
+            self.mandatory_pre_processing = [("impute_and_binarize", ColumnTransformer(
+                transformers=[
+                    ("num", numeric_transformer, numeric_features),
+                    ("cat", categorical_transformer, categorical_features),
+                ]
+            ))]
+        else:
+            self.mandatory_pre_processing = []
     
     ''' Samples a pipeline according to the weights
     '''
@@ -70,7 +96,7 @@ class PipelineSampler:
                     if hp.name in sampled_config:
                         params[hp.name] = sampled_config[hp.name]
                 steps.append((name, build_estimator(comp, params, self.X, self.y)))
-        return sklearn.pipeline.Pipeline(steps)
+        return sklearn.pipeline.Pipeline(self.mandatory_pre_processing + steps)
     
 
     
@@ -84,11 +110,12 @@ class RandomSearch():
         self.timeout_per_eval = timeout_per_eval
         self.scoring = scoring
         self.side_scorings = side_scorings
+        self.mandatory_pre_processing = None
     
     def fit(self, X, y):
         start_time = time.time()
         sampler = PipelineSampler(self.searchspace, X, y, self.seed)
-        deadline = start_time + self.timeout_total
+        deadline = start_time + self.timeout_total        
         pool = EvaluationPool(X, y, self.scoring, self.side_scorings, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01)
         
         self.history = []
@@ -96,14 +123,16 @@ class RandomSearch():
         self.best_solution = None
         while time.time() < deadline - 10:
             pl = sampler.sample()
-            print("Now evaluating " + str(pl).replace("\n", ""))
+            print("Now evaluating " + "".join(["\n\t" + str(e).replace("\n", "").replace("\t", "").replace("  ", " ").replace("  ", " ").replace("  ", " ").replace("  ", " ").replace("  ", " ").replace("  ", " ").replace("  ", " ").replace("  ", " ").replace("  ", " ").replace("  ", " ") for e in pl.steps]))
             print(f"Remaining time: {deadline - time.time()}s")
             try:
                 scores = pool.evaluate(pl, deadline=deadline, timeout=self.timeout_per_eval)
+                print(scores)
+                raise Exception()
             except KeyboardInterrupt:
                 raise
-            except:
-                print("Observed error in execution of pipeline.")
+            except Exception as e:
+                print(f"Observed error in execution of pipeline: {e}")
                 scores = {scoring: np.nan for scoring in [self.scoring] + self.side_scorings}
             score = scores[self.scoring]
             now = time.time()

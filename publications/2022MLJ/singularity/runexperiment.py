@@ -1,6 +1,6 @@
 from multiprocessing import set_start_method
-if __name__ == '__main__':
-    set_start_method("spawn")
+#if __name__ == '__main__':
+    #set_start_method("spawn")
 
 # core stuff
 import argparse
@@ -14,6 +14,9 @@ from sklearn.experimental import enable_hist_gradient_boosting  # noqa
 
 # auto-sklearn
 import autosklearn.classification
+from sklearn import *
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 from autosklearn.metrics import accuracy, balanced_accuracy, precision, recall, f1, roc_auc, log_loss
 
 # naiveautoml
@@ -33,14 +36,40 @@ def parse_args():
     parser.add_argument('--metric', type=str, choices=["neg_log_loss", "roc_auc"], default="neg_log_loss")
     return parser.parse_args()
 
+def get_mandatory_preprocessing(X, y):
+    
+    # determine fixed pre-processing steps for imputation and binarization (naml does this automatically)
+    types = [set([type(v) for v in r]) for r in X.T]
+    numeric_features = [c for c, t in enumerate(types) if len(t) == 1 and list(t)[0] != str]
+    numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
+    categorical_features = [i for i in range(X.shape[1]) if i not in numeric_features]
+    missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
+    if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
+        categorical_transformer = Pipeline([
+            ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
+            ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse = True)),
+
+        ])
+        mandatory_pre_processing = [("impute_and_binarize", ColumnTransformer(
+            transformers=[
+                ("num", numeric_transformer, numeric_features),
+                ("cat", categorical_transformer, categorical_features),
+            ]
+        ))]
+    else:
+        mandatory_pre_processing = []
+    return mandatory_pre_processing
+
 
 def get_learner(args,  X_train, y_train, scoring):
     
     name = args.algorithm
     
+    mandatory_pre_processing = get_mandatory_preprocessing(X_train, y_train)
+    
     
     if name == "rf":
-        return sklearn.ensemble.RandomForestClassifier()
+        return Pipeline(mandatory_pre_processing + [("learner", sklearn.ensemble.RandomForestClassifier())])
     
     elif name == "random":
         return RandomSearch("searchspace.json", args.seed, args.timeout_total, args.timeout_per_eval, scoring, side_scorings = ["accuracy", "roc_auc"])
@@ -225,6 +254,9 @@ if __name__ == '__main__':
     logger.info(f"Number of classes in test data: {len(pd.unique(y_test))}")
     labels = list(pd.unique(y))
     
+    # get mandatory pre-processing
+    mandatory_pre_processing = get_mandatory_preprocessing(X_train, y_train)
+    
     # get metric
     scoring = args.metric
     metric_sk = sklearn.metrics.roc_auc_score if scoring == "roc_auc" else sklearn.metrics.log_loss
@@ -271,14 +303,16 @@ if __name__ == '__main__':
             if feature_pre_processor not in allowed_feature_preprocessors:
                 raise TypeError(f"Feature-Pre-Processor must not be " + str(feature_pre_processor.__name__))
 
-
+        # put the mandaroy pre-processing first
+        pipeline_extended = Pipeline(mandatory_pre_processing + pipeline.steps)
+        
         # If all is good, use the original evaluation function
-        score = original_evaluation(pipeline, *args, **kwargs)
+        score = original_evaluation(pipeline_extended, *args, **kwargs)
         if score[1][0] > best_internal_score[0]:
             best_internal_score[0] = score[1][0]
         logger.info(f"Finished evaluation. Score is {score[1][0]}. Best seen score is {best_internal_score[0]}")
         return score
-
+    
     gama.genetic_programming.compilers.scikitlearn.evaluate_pipeline = monkey_patch_evaluate
 
     def primitive_node_to_sklearn(primitive_node: PrimitiveNode) -> object:
