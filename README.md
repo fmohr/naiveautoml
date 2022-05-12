@@ -45,6 +45,12 @@ Want to put a **timeout**? Specify it *in seconds* (should be always bigger than
 ```python
 naml = naiveautoml.NaiveAutoML(timeout=20)
 ```
+The timeout for pipeline evaluations is 10 seconds per default. You can modify this timeout on single pipeline evaluations with
+
+```python
+naml = naiveautoml.NaiveAutoML(execution_timeout=20)
+```
+
 This can also be **combined** with `max_hpo_iterations`.
 
 Want to see the **progress bar** for the optimization process?
