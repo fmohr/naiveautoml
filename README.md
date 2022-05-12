@@ -11,6 +11,9 @@ It is slightly outperformed by random forests in the (very) short run but outper
 
 Note that `naiveautoml` does not ask you for *any* parametrization (not even a timeout); it still provides you with the possibility to customize a lot of its behavior. Given our exhaustive empirical results, you can be confident that you will get at most of the times results that are comparable to what you would get with other tools.
 
+Another great feature of `naiveautoml` is that you can use it directly on data with missing values or discrete attributes.`naiveautoml` will try to automatically detect columns with values others than numbers and treat them as categorical.
+Missing values will be imputed per default with the median value of a column (for numerical attributes) or the mode (for categorical attributes).
+
 ## Python
 Install via `pip install naiveautoml.`
 The current version is 0.0.8.
