@@ -6,9 +6,9 @@ import json
 import itertools as it
 import logging
 import scipy.sparse
-#from tqdm import tqdm
+from tqdm import tqdm
 import time
-#import importlib.resources as pkg_resources
+import importlib.resources as pkg_resources
 
 # sklearn
 import sklearn
@@ -26,29 +26,13 @@ from naiveautoml.commons import *
 
 class NaiveAutoML:
 
-    def __init__(self, search_space = None, scoring = None, side_scores = None , num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False, sparse = False):
-        
-        ''' search_space is a string or a list of dictionaries
-            - if it is a dict, the last one for the learner and all the others for pre-processing. Each dictionary has an entry "name" and an entry "components", which is a list of components with their parameters.
-            - if it is a string, a json file with the name of search_space is read in with the same semantics
-         '''
-        if search_space is None or type(search_space) == str:
-            if search_space is None:
-                json_str = pkg_resources.read_text('naiveautoml', 'searchspace.json')
-                search_space = json.loads(json_str)
-            elif type(search_space) == str:
-                f = open(search_space)
-                search_space = json.load(f)
-            
-            # randomly shuffle elements in the search space
-            self.search_space = []
-            for step in search_space:
-                comps = step["components"]
-                random.shuffle(comps)
-                self.search_space.append(step)
-            
+    def __init__(self, search_space = None, scoring = None, side_scores = None , num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, standard_regressor = sklearn.linear_model.LinearRegression(), logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False, sparse = False, task_type = "auto"):
+        if type(search_space) == str:
+            f = open(search_space)
+            self.search_space = json.load(f)
         else:
             self.search_space = search_space
+            
         self.scoring = scoring
         self.side_scores = side_scores
         self.num_cpus = num_cpus
@@ -67,17 +51,37 @@ class NaiveAutoML:
         self.sparse = sparse # do one-hot encoding via sparse representations (default is False since this is not supported by all algorithms)
         self.mandatory_pre_processing = None
         
-        # define ordering of slots for optimization
-        if opt_ordering is None:
-            opt_ordering = ["classifier"]
-            for step in self.search_space:
-                if step["name"] != "classifier":
-                    opt_ordering.append(step["name"])
+        self.task_type = task_type
         self.opt_ordering = opt_ordering
-        
+
+                
         ## init logger
         self.logger_name = logger_name
         self.logger = logging.getLogger('naiveautoml' if logger_name is None else logger_name)
+        
+    def register_search_space(self, X, y):
+        
+        # infer task type
+        if self.task_type == "auto":
+            task_type = "regression" if len(np.unique(y)) > 100 else "classification"
+        else:
+            task_type = self.task_type
+        
+        
+        ''' search_space is a string or a list of dictionaries
+            - if it is a dict, the last one for the learner and all the others for pre-processing. Each dictionary has an entry "name" and an entry "components", which is a list of components with their parameters.
+            - if it is a string, a json file with the name of search_space is read in with the same semantics
+         '''
+        json_str = pkg_resources.read_text('naiveautoml', 'searchspace-' + task_type + '.json')
+        self.search_space = json.loads(json_str)
+        
+    def get_shuffled_version_of_search_space(self):
+        search_space = []
+        for step in self.search_space:
+            comps = step["components"].copy()
+            random.shuffle(comps)
+            search_space.append(step)
+        return search_space
         
     def check_combinations(self, X, y):
         
@@ -87,7 +91,7 @@ class NaiveAutoML:
         for step in self.search_space:
             names.append(step["name"])
             cands = []
-            if step["name"] != "classifier":
+            if step["name"] != "learner":
                 cands.append(None)
             cands.extend([get_class(comp["class"]) for comp in step["components"]])
             algorithms_per_stage.append(cands)
@@ -115,12 +119,12 @@ class NaiveAutoML:
         if self.strictly_naive: ## strictly naive case
             
             # build pipeline to be evaluated here
-            if step_name == "classifier":
-                steps = [("classifier", build_estimator(comp, None, X, y))]
+            if step_name == "learner":
+                steps = [("learner", build_estimator(comp, None, X, y))]
             elif comp is None:
-                steps = [("classifier", self.standard_classifier())]
+                steps = [("learner", self.standard_classifier())]
             else:
-                steps = [(step_name, build_estimator(comp, None, X, y)), ("classifier", self.standard_classifier())]
+                steps = [(step_name, build_estimator(comp, None, X, y)), ("learner", self.standard_classifier())]
             return Pipeline(steps = self.mandatory_pre_processing + steps)
         
         else: ## semi-naive case (consider previous decisions)
@@ -158,21 +162,32 @@ class NaiveAutoML:
         if self.show_progress:
             print("Progress for algorithm selection:")
             pbar = tqdm(total=sum([len(step["components"]) for step in self.search_space]))
+            
+        
+        # retrieve ordering of slots for optimization
+        if self.opt_ordering is None:
+            opt_ordering = ["learner"]
+            for step in self.search_space:
+                if step["name"] != "learner":
+                    opt_ordering.append(step["name"])
+        else:
+            opt_ordering = self.opt_ordering
+            
                 
-        for step_index, step_name in enumerate(self.opt_ordering):
+        for step_index, step_name in enumerate(opt_ordering):
             
             # create list of components to try for this slot
             step = [step for step in self.search_space if step["name"] == step_name][0]
             self.logger.info("--------------------------------------------------")
             self.logger.info(f"Selecting component for step with name: {step_name}")
             self.logger.info("--------------------------------------------------")
-            if not step_name in ["classifier"]:
+            if not step_name in ["learner"]:
                 components = [None] + step["components"]
             else:
                 components = step["components"]
             
             # find best default parametrization for this slot (depending on choice of previously configured slots)
-            pool = EvaluationPool(X, y, self.scoring, self.side_scores, logger_name = self.logger_name + ".pool")
+            pool = EvaluationPool(X, y, self.scoring, self.side_scores, logger_name = None if self.logger_name is None else self.logger_name + ".pool")
             best_score = -np.inf
             decision = None
             for comp in components:
@@ -250,12 +265,12 @@ class NaiveAutoML:
         self.hpo_processes = hpo_processes = {}
         step_names = [d[0] for d in decisions]
         for step_name, comp in decisions:
-            if step_name == "classifier":
+            if step_name == "learner":
                 other_instances = [(step_name, None)]
             else:
-                other_instances = [(step_name, None), ("classifier", self.standard_classifier())]
+                other_instances = [(step_name, None), ("learner", self.standard_classifier())]
             index = 0 # it is (rather by coincidence) the first step we want to optimize
-            hpo = HPOProcess(step_name, comp, X, y, self.scoring, self.side_scores, self.execution_timeout, self.mandatory_pre_processing, other_instances, index, 1800, 1000, allow_exhaustive_search = (self.max_hpo_iterations is None), logger_name = self.logger_name + ".hpo")
+            hpo = HPOProcess(step_name, comp, X, y, self.scoring, self.side_scores, self.execution_timeout, self.mandatory_pre_processing, other_instances, index, 1800, 1000, allow_exhaustive_search = (self.max_hpo_iterations is None), logger_name =  None if self.logger_name is None else self.logger_name + ".hpo")
             hpo.best_score = components_with_score[step_name] # performance of default config
             hpo_processes[step_name] = hpo
         
@@ -321,6 +336,9 @@ class NaiveAutoML:
 
     def fit(self, X, y):
         
+        # register search space
+        self.register_search_space(X, y)
+
         # initialize
         self.pl = None
         self.best_score_overall = -np.inf
@@ -329,8 +347,11 @@ class NaiveAutoML:
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
         self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
         if self.scoring is None:
-            self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
-            
+            if self.task_type == "classification":
+                self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
+            else:
+                self.scoring = "neg_mean_squared_error"
+        
         # determine fixed pre-processing steps for imputation and binarization
         types = [set([type(v) for v in r]) for r in X.T]
         numeric_features = [c for c, t in enumerate(types) if len(t) == 1 and list(t)[0] != str]
@@ -396,6 +417,7 @@ class NaiveAutoML:
         return scores
 
     def predict(self, X):
+        print(self.pl)
         return self.pl.predict(X)
     
     def predict_proba(self, X):

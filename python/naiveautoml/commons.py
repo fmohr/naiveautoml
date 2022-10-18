@@ -19,6 +19,7 @@ from func_timeout import func_timeout, FunctionTimedOut
 import ConfigSpace
 from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
+import json
 
 def get_class( kls ):
     parts = kls.split('.')
@@ -83,37 +84,21 @@ class EvaluationPool:
                 
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X[train_index], y[train_index])
-                y_hat = pl_copy.predict(X[test_index])
-                y_prob = pl_copy.predict_proba(X[test_index])
-                labels = pl_copy.classes_
                 
                 # compute values for each metric
                 for scoring in scorings:
                     scorer = get_scorer(scoring)
-                    if type(scorer) == sklearn.metrics._scorer._PredictScorer:
-                        try:
-                            score = get_scorer(scoring)._score_func(y_test, y_hat)
-                        except:
-                            score = np.nan
-                    elif type(scorer) == sklearn.metrics._scorer._ProbaScorer:
-                        try:
-                            score = get_scorer(scoring)._score_func(y_test, y_prob,labels=labels)
-                        except:
-                            score = np.nan
-                    elif type(scorer) == sklearn.metrics._scorer._ThresholdScorer:
-                        try:
-                            if len(labels) == 1:
-                                score = get_scorer(scoring)._score_func(y_test, y_prob[:,1])
-                            else:
-                                score = get_scorer(scoring)._score_func(y_test, y_prob, labels=labels)
-                        except:
-                            score = np.nan
-                    else:
-                        raise Exception(f"Unsupported type {type(scorer)}")
-                    if not np.isnan(score) and scoring == "neg_log_loss":
-                        score *= -1
+                    try:
+                        score = scorer(pl_copy, X[test_index], y[test_index])
+                    except KeyboardInterrupt:
+                        raise
+                    except:
+                        score = np.nan
+                        
                     scores[scoring].append(score)
             return scores
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
             if errors in ["message", "ignore"]:
                 if errors == "message":
@@ -192,7 +177,7 @@ def build_estimator(comp, params, X, y):
     
     if params is None:
         if get_class(comp["class"]) == sklearn.svm.SVC:
-            params = {"kernel": config_json.read(comp["params"]).get_hyperparameter("kernel").value}
+            params = {"kernel": config_json.read(json.dumps(comp["params"])).get_hyperparameter("kernel").value}
         else:
             return get_class(comp["class"])()
     
@@ -285,6 +270,159 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_impurity_decrease=min_impurity_decrease,
             class_weight=None)
     
+    if clazz == sklearn.tree.DecisionTreeRegressor:
+        criterion = params["criterion"]
+        max_features = float(params["max_features"])
+        if check_none(params["max_depth_factor"]):
+            max_depth_factor = params["max_depth_factor"] = None
+        else:
+            num_features = X.shape[1]
+            max_depth_factor = int(params["max_depth_factor"])
+            max_depth_factor = max(
+                1, int(np.round(params["max_depth_factor"] * num_features, 0))
+            )
+        min_samples_split = int(params["min_samples_split"])
+        min_samples_leaf = int(params["min_samples_leaf"])
+        if check_none(params["max_leaf_nodes"]):
+            max_leaf_nodes = None
+        else:
+            max_leaf_nodes = int(params["max_leaf_nodes"])
+        min_weight_fraction_leaf = float(params["min_weight_fraction_leaf"])
+        min_impurity_decrease = float(params["min_impurity_decrease"])
+
+        return sklearn.tree.DecisionTreeRegressor(
+            criterion=criterion,
+            max_depth=max_depth_factor,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            max_leaf_nodes=max_leaf_nodes,
+            min_weight_fraction_leaf=min_weight_fraction_leaf,
+            min_impurity_decrease=min_impurity_decrease
+        )
+    
+    if clazz == sklearn.ensemble.AdaBoostRegressor:
+        n_estimators = int(params["n_estimators"])
+        learning_rate = float(params["learning_rate"])
+        max_depth = int(params["max_depth"])
+        base_estimator = sklearn.tree.DecisionTreeRegressor(max_depth=max_depth)
+
+        return sklearn.ensemble.AdaBoostRegressor(
+            base_estimator=base_estimator,
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+        )
+    
+    if clazz == sklearn.ensemble.ExtraTreesRegressor:
+        n_estimators = 10**3
+        if params["criterion"] not in ("mse", "friedman_mse", "mae"):
+            raise ValueError(
+                "'criterion' is not in ('mse', 'friedman_mse', "
+                "'mae): %s" % self.criterion
+            )
+
+        if check_none(params["max_depth"]):
+            max_depth = None
+        else:
+            max_depth = int(params["max_depth"])
+
+        if check_none(params["max_leaf_nodes"]):
+            max_leaf_nodes = None
+        else:
+            max_leaf_nodes = int(params["max_leaf_nodes"])
+
+        min_samples_leaf = int(params["min_samples_leaf"])
+        min_samples_split = int(params["min_samples_split"])
+        max_features = float(params["max_features"])
+        min_impurity_decrease = float(params["min_impurity_decrease"])
+        min_weight_fraction_leaf = float(params["min_weight_fraction_leaf"])
+        bootstrap = check_for_bool(params["bootstrap"])
+
+        return sklearn.ensemble.ExtraTreesRegressor(
+            n_estimators=n_estimators,
+            criterion=params["criterion"],
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            bootstrap=bootstrap,
+            max_features=max_features,
+            max_leaf_nodes=max_leaf_nodes,
+            min_weight_fraction_leaf=min_weight_fraction_leaf,
+            min_impurity_decrease=min_impurity_decrease,
+            oob_score=False,
+            n_jobs=1
+        )
+    
+    if clazz == sklearn.gaussian_process.GaussianProcessRegressor:
+        alpha = float(params["alpha"])
+        thetaL = float(params["thetaL"])
+        thetaU = float(params["thetaU"])
+
+        #n_features = X.shape[1]
+        kernel = sklearn.gaussian_process.kernels.RBF(
+            #length_scale=[1.0] * n_features,
+            #length_scale_bounds=[(thetaL, thetaU)] * n_features,
+        )
+
+        # Instanciate a Gaussian Process model
+        return sklearn.gaussian_process.GaussianProcessRegressor(
+            kernel=kernel,
+            n_restarts_optimizer=10,
+            optimizer="fmin_l_bfgs_b",
+            alpha=alpha,
+            copy_X_train=True,
+            normalize_y=True,
+        )
+    
+    if clazz == sklearn.ensemble.HistGradientBoostingRegressor:
+        learning_rate = float(params["learning_rate"])
+        max_iter = 1000
+        min_samples_leaf = int(params["min_samples_leaf"])
+        if check_none(params["max_depth"]):
+            max_depth = None
+        else:
+            max_depth = int(params["max_depth"])
+        if check_none(params["max_leaf_nodes"]):
+            max_leaf_nodes = None
+        else:
+            max_leaf_nodes = int(params["max_leaf_nodes"])
+        max_bins = int(params["max_bins"])
+        l2_regularization = float(params["l2_regularization"])
+        tol = float(params["tol"])
+        if check_none(params["scoring"]):
+            scoring = None
+        else:
+            scoring = params["scoring"]
+            
+        if params["early_stop"] == "off":
+            n_iter_no_change = 0
+            validation_fraction_ = None
+        elif params["early_stop"] == "train":
+            n_iter_no_change = int(params["n_iter_no_change"])
+            validation_fraction_ = None
+        elif params["early_stop"] == "valid":
+            n_iter_no_change = int(params["n_iter_no_change"])
+            validation_fraction_ = float(params["validation_fraction"])
+        else:
+            raise ValueError("early_stop should be either off, train or valid")
+            
+        return sklearn.ensemble.HistGradientBoostingRegressor(
+            loss=params["loss"],
+            learning_rate=learning_rate,
+            max_iter=max_iter,
+            min_samples_leaf=min_samples_leaf,
+            max_depth=max_depth,
+            max_leaf_nodes=max_leaf_nodes,
+            max_bins=max_bins,
+            l2_regularization=l2_regularization,
+            tol=tol,
+            scoring=scoring,
+            n_iter_no_change=n_iter_no_change,
+            validation_fraction=validation_fraction_,
+            verbose=False,
+            warm_start=False,
+        )
+    
+    
     if clazz == sklearn.svm.LinearSVC:
         penalty = params["penalty"]
         loss = params["loss"]
@@ -320,10 +458,212 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         shrinking = check_for_bool(params["shrinking"])
         
         return sklearn.svm.SVC(C=C, kernel=kernel,degree=degree,gamma=gamma,coef0=coef0,shrinking=shrinking,tol=tol, max_iter=max_iter, decision_function_shape='ovr', probability=True)
+
+    if clazz == sklearn.svm.LinearSVR:
+        C = float(params["C"])
+        tol = float(params["tol"])
+        epsilon = float(params["epsilon"])
+
+        dual = check_for_bool(params["dual"])
+        fit_intercept = check_for_bool(params["fit_intercept"])
+        intercept_scaling = float(params["intercept_scaling"])
+
+        return sklearn.svm.LinearSVR(
+            epsilon=epsilon,
+            loss=params["loss"],
+            dual=dual,
+            tol=tol,
+            C=C,
+            fit_intercept=fit_intercept,
+            intercept_scaling=intercept_scaling,
+        )
+    
+    if clazz == sklearn.svm.SVR:
+        C = float(params["C"])
+        epsilon = float(params["epsilon"])
+        tol = float(params["tol"])
+        shrinking = check_for_bool(params["shrinking"])
+        degree = int(params["degree"]) if "degree" in params else 3
+        gamma = float(params["gamma"]) if "gamma" in params else 0.1
+        if not "coef0" in params or check_none(params["coef0"]):
+            coef0 = 0.0
+        else:
+            coef0 = float(params["coef0"])
+        max_iter = int(params["max_iter"])
+        
+        # Calculate the size of the kernel cache (in MB) for sklearn's LibSVM.
+        # The cache size is calculated as 2/3 of the available memory
+        # (which is calculated as the memory limit minus the used memory)
+        try:
+            # Retrieve memory limits imposed on the process
+            soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+
+            if soft > 0:
+                # Convert limit to units of megabytes
+                soft /= 1024 * 1024
+
+                # Retrieve memory used by this process
+                maxrss = resource.getrusage(resource.RUSAGE_SELF)[2] / 1024
+
+                # In MacOS, the MaxRSS output of resource.getrusage in bytes;
+                # on other platforms, it's in kilobytes
+                if sys.platform == "darwin":
+                    maxrss = maxrss / 1024
+
+                cache_size = (soft - maxrss) / 1.5
+
+                if cache_size < 0:
+                    cache_size = 200
+            else:
+                cache_size = 200
+        except Exception:
+            cache_size = 200
+
+        return sklearn.svm.SVR(
+            kernel=params["kernel"],
+            C=C,
+            epsilon=epsilon,
+            tol=tol,
+            shrinking=shrinking,
+            degree=degree,
+            gamma=gamma,
+            coef0=coef0,
+            cache_size=cache_size
+        )
     
     
+    if clazz == sklearn.neural_network.MLPRegressor:
+        max_iter = 10**4
+        hidden_layer_depth = int(params["hidden_layer_depth"])
+        num_nodes_per_layer = int(params["num_nodes_per_layer"])
+        hidden_layer_sizes = tuple(
+            num_nodes_per_layer for i in range(hidden_layer_depth)
+        )
+        activation = str(params["activation"])
+        alpha = float(params["alpha"])
+        learning_rate_init = float(params["learning_rate_init"])
+        early_stopping = str(params["early_stopping"])
+        if params["early_stopping"] == "train":
+            validation_fraction = 0.0
+            tol = float(params["tol"])
+            n_iter_no_change = int(params["n_iter_no_change"])
+            early_stopping_val = False
+        elif params["early_stopping"] == "valid":
+            validation_fraction = float(params["validation_fraction"])
+            tol = float(params["tol"])
+            n_iter_no_change = int(params["n_iter_no_change"])
+            early_stopping_val = True
+        else:
+            raise ValueError(
+                "Set early stopping to unknown value %s" % self.early_stopping
+            )
+        # elif self.early_stopping == "off":
+        #     self.validation_fraction = 0
+        #     self.tol = 10000
+        #     self.n_iter_no_change = self.max_iter
+        #     self.early_stopping_val = False
+
+        solver = params["solver"]
+
+        try:
+            batch_size = int(params["batch_size"])
+        except ValueError:
+            batch_size = str(params["batch_size"])
+
+        shuffle = check_for_bool(params["shuffle"])
+        beta_1 = float(params["beta_1"])
+        beta_2 = float(params["beta_2"])
+        epsilon = float(params["epsilon"])
+        beta_1 = float(params["beta_1"])
+        
+
+        # initial fit of only increment trees
+        return sklearn.neural_network.MLPRegressor(
+            hidden_layer_sizes=hidden_layer_sizes,
+            activation=activation,
+            solver=solver,
+            alpha=alpha,
+            batch_size=batch_size,
+            learning_rate_init=learning_rate_init,
+            max_iter=max_iter,
+            shuffle=shuffle,
+            warm_start=False,
+            early_stopping=early_stopping_val,
+            validation_fraction=validation_fraction,
+            n_iter_no_change=n_iter_no_change,
+            tol=tol,
+            beta_1=beta_2,
+            beta_2=beta_1,
+            epsilon=epsilon,
+            # We do not use these, see comments below in search space
+            # momentum=self.momentum,
+            # nesterovs_momentum=self.nesterovs_momentum,
+            # power_t=self.power_t,
+            # learning_rate=self.learning_rate,
+            # max_fun=self.max_fun
+        )
     
+    if clazz == sklearn.ensemble.RandomForestRegressor:
+        n_estimators = 10**3
+        if check_none(params["max_depth"]):
+            max_depth = None
+        else:
+            max_depth = int(params["max_depth"])
+
+        min_samples_split = int(params["min_samples_split"])
+        min_samples_leaf = int(params["min_samples_leaf"])
+
+        max_features = float(params["max_features"])
+
+        bootstrap = check_for_bool(params["bootstrap"])
+
+        if check_none(params["max_leaf_nodes"]):
+            max_leaf_nodes = None
+        else:
+            max_leaf_nodes = int(params["max_leaf_nodes"])
+
+        min_impurity_decrease = float(params["min_impurity_decrease"])
+
+        return sklearn.ensemble.RandomForestRegressor(
+            n_estimators=n_estimators,
+            criterion=params["criterion"],
+            max_features=max_features,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            min_weight_fraction_leaf=params["min_weight_fraction_leaf"],
+            bootstrap=bootstrap,
+            max_leaf_nodes=max_leaf_nodes,
+            min_impurity_decrease=min_impurity_decrease,
+            warm_start=False,
+        )
     
+    if clazz == sklearn.linear_model.SGDRegressor:
+        alpha = float(params["alpha"])
+        l1_ratio = float(params["l1_ratio"]) if "l1_ratio" in params else 0.15
+        epsilon = float(params["epsilon"]) if "epsilon" in params else 0.1
+        eta0 = float(params["eta0"]) if "eta0" in params else 0.1
+        power_t = float(params["power_t"]) if "power_t" in params else 0.25
+        average = check_for_bool(params["average"])
+        fit_intercept = check_for_bool(params["fit_intercept"])
+        tol = float(params["tol"])
+
+        return sklearn.linear_model.SGDRegressor(
+            loss=params["loss"],
+            penalty=params["penalty"],
+            alpha=alpha,
+            fit_intercept=fit_intercept,
+            tol=tol,
+            learning_rate=params["learning_rate"],
+            l1_ratio=l1_ratio,
+            epsilon=epsilon,
+            eta0=eta0,
+            power_t=power_t,
+            shuffle=True,
+            average=average,
+            warm_start=False,
+        )
+
     if clazz == sklearn.discriminant_analysis.LinearDiscriminantAnalysis:
         if params["shrinkage"] in (None, "none", "None"):
             shrinkage_ = None
@@ -486,7 +826,6 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             warm_start=True)
     
     if clazz == sklearn.ensemble.GradientBoostingClassifier:
-        from sklearn.experimental import enable_hist_gradient_boosting  # noqa
         learning_rate = float(params["learning_rate"])
         max_iter = int(params["max_iter"]) if "max_iter" in params else 512
         min_samples_leaf = int(params["min_samples_leaf"])
@@ -667,7 +1006,7 @@ class HPOProcess:
         self.mandatory_pre_processing = mandatory_pre_processing
         self.other_step_component_instances = other_step_component_instances
         self.execution_timeout = execution_timeout
-        config_space_as_string = comp["params"]
+        config_space_as_string = json.dumps(comp["params"])
         self.config_space = config_json.read(config_space_as_string)
         self.space_size = get_hyperparameter_space_size(self.config_space)
         self.eval_runtimes = []
