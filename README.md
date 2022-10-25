@@ -74,15 +74,20 @@ logger.addHandler(ch)
 ```
 
 ## Citing naive automl
-The current option to cite naiveautoml is
+Please use the reference from the Machine Learning Journal to cite Naive AutoML:
+
+https://link.springer.com/article/10.1007/s10994-022-06200-0#article-info
 
 ```
-@inproceedings{mohr2021replacing,
-  title={Replacing the Ex-Def Baseline in AutoML by Naive AutoML},
+@article{mohr2022naive,
+  title={{Naive Automated Machine Learning}},
   author={Mohr, Felix and Wever, Marcel},
-  booktitle={8th ICML Workshop on Automated Machine Learning (AutoML)},
-  year={2021}
+  journal={Machine Learning},
+  pages={1--40},
+  year={2022},
+  publisher={Springer}
 }
+
 ```
 Note that the implementation deviates in some aspects from the workshop paper.
 A follow-up paper with the exact implementation used here is currently under review.
