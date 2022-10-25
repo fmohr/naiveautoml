@@ -1,4 +1,4 @@
-# naiveautoml
+# Naive AutoML
 
 ## Why to use?
 `naiveautoml` has significant performance advantages over other tools like auto-sklearn in the short run and is hardly outperformed in the long run.
