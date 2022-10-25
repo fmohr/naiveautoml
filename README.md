@@ -88,6 +88,3 @@ https://link.springer.com/article/10.1007/s10994-022-06200-0#article-info
   publisher={Springer}
 }
 
-```
-Note that the implementation deviates in some aspects from the workshop paper.
-A follow-up paper with the exact implementation used here is currently under review.
