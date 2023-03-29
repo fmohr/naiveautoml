@@ -83,8 +83,10 @@ https://link.springer.com/article/10.1007/s10994-022-06200-0#article-info
   title={{Naive Automated Machine Learning}},
   author={Mohr, Felix and Wever, Marcel},
   journal={Machine Learning},
-  pages={1--40},
+  pages={1131--1170},
   year={2022},
-  publisher={Springer}
+  publisher={Springer},
+  volume={112},
+  issue={4}
 }
 
