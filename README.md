@@ -16,7 +16,9 @@ Missing values will be imputed per default with the median value of a column (fo
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.0.8.
+The current version is 0.0.13.
+
+We highly recommend to check out the [usage example python notebook](https://github.com/fmohr/naiveautoml/blob/master/python/usage-example.ipynb).
 
 Finding an optimal model for your data is then as easy as running:
 
@@ -71,6 +73,26 @@ ch.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+```
+
+### Scoring functions
+By default, log-loss is used for classification (AUROC in the case of binary classification). To use a custom scoring function, pass it in the constructor:
+
+```python
+naml = naiveautoml.NaiveAutoML(scoring="accuracy")
+```
+
+### Custom Categorical Features
+Naive AutoML determines the categorical attributes automatically as far as possible.
+However, sometimes even columns consisting only of numbers should be treated as categorical attributes.
+To pass an explicit list of attributes that should be treated as categoricals, use the `categorical_features` parameter in the `fit` function:
+
+```python
+naml.fit(X_df, y, categorical_features=["name_of_first_categorical_attribute", "name_of_second_categorical_attribute"])
+```
+alternatively (or if your data is a numpy array), you can use the index of the column:
+```python
+naml.fit(X_df, y, categorical_features=[4, 9])
 ```
 
 ## Citing naive automl
