@@ -1,4 +1,5 @@
 # core
+import pandas as pd
 import logging, warnings
 import itertools as it
 import os, psutil
@@ -10,6 +11,7 @@ import sklearn
 from sklearn import *
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import get_scorer
+from sklearn.metrics import make_scorer
 
 
 # timeout functions
@@ -37,15 +39,19 @@ def get_step_with_name(steps, name):
     candidates = [s for s in steps if s[0] == name]
     return candidates[0]
 
+def get_scoring_name(scoring):
+    return scoring if type(scoring) == str else scoring["name"]
+
+
 class EvaluationPool:
 
-    def __init__(self, X, y, scoring, side_scores = None, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01, logger_name = None):
+    def __init__(self, X, y, scoring, evaluation_fun = None, side_scores = None, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01, logger_name = None):
         self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
         if X is None:
             raise Exception("Parameter X must not be None")
         if y is None:
             raise Exception("Parameter y must not be None")
-        if type(X) != np.ndarray and type(X) != scipy.sparse.csr.csr_matrix and type(X) != scipy.sparse.csc.csc_matrix and type(X) != scipy.sparse.lil.lil_matrix:
+        if type(X) != pd.DataFrame and type(X) != np.ndarray and type(X) != scipy.sparse.csr.csr_matrix and type(X) != scipy.sparse.csc.csc_matrix and type(X) != scipy.sparse.lil.lil_matrix:
             raise Exception("X must be a numpy array but is " + str(type(X)))
         self.X = X
         self.y = y
@@ -61,6 +67,7 @@ class EvaluationPool:
         self.tolerance_tuning = tolerance_tuning
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
+        self.evaluation_fun = self.cross_validate if evaluation_fun is None else evaluation_fun
 
     def tellEvaluation(self, pl, scores, timestamp):
         spl = str(pl)
@@ -69,33 +76,40 @@ class EvaluationPool:
         if score > self.bestScore:
             self.bestScore = score        
             self.best_spl = spl
-            
-    def cross_validate(self, pl, X, y, scorings, errors="raise"): # just a wrapper to ease parallelism
+                        
+    def cross_validate(self, pl, X, y, scorings, errors="message"): # just a wrapper to ease parallelism
         warnings.filterwarnings('ignore', module = 'sklearn')
         try:
             if type(scorings) != list:
                 scorings = [scorings]
             skf = sklearn.model_selection.StratifiedKFold(n_splits=5, random_state=None, shuffle=True)
-            scores = {scoring: [] for scoring in scorings}
+            scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in skf.split(X, y):
                 
-                X_test = X[test_index]
-                y_test = y[test_index]
+                X_train = X.iloc[train_index] if type(X) == pd.DataFrame else X[train_index]
+                y_train = y.iloc[train_index] if type(y) == pd.Series else y[train_index]
+                X_test = X.iloc[test_index] if type(X) == pd.DataFrame else X[test_index]
+                y_test = y.iloc[test_index] if type(y) == pd.Series else y[test_index]
                 
                 pl_copy = sklearn.base.clone(pl)
-                pl_copy.fit(X[train_index], y[train_index])
+                pl_copy.fit(X_train, y_train)
                 
                 # compute values for each metric
                 for scoring in scorings:
-                    scorer = get_scorer(scoring)
+                    scorer = get_scorer(scoring) if type(scoring) == str else make_scorer(**{key: val for key, val in scoring.items() if key != "name"})
                     try:
-                        score = scorer(pl_copy, X[test_index], y[test_index])
+                        score = scorer(pl_copy, X_test, y_test)
                     except KeyboardInterrupt:
                         raise
                     except:
-                        score = np.nan
+                        if errors in ["message", "ignore"]:
+                            if errors == "message":
+                                self.logger.info(f"Observed exception in validation of pipeline {pl_copy}. Placing nan.")
+                            score = np.nan
+                        else:
+                            raise
                         
-                    scores[scoring].append(score)
+                    scores[get_scoring_name(scoring)].append(score)
             return scores
         except KeyboardInterrupt:
             raise
@@ -110,7 +124,7 @@ class EvaluationPool:
     def evaluate(self, pl, timeout=None, deadline=None):
         if is_pipeline_forbidden(pl):
             self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
-            return {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
+            return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
         
         process = psutil.Process(os.getpid())
         self.logger.info(f"Initializing evaluation of {pl} with current memory consumption {int(process.memory_info().rss / 1024 / 1024)} MB. Now awaiting results.")
@@ -118,19 +132,21 @@ class EvaluationPool:
         start_outer = time.time()
         spl = str(pl)
         if spl in self.cache:
-            out = {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
-            out[self.scoring] = np.round(np.mean(self.cache[spl][1]), 4)
+            out = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
+            out[get_scoring_name(self.scoring)] = np.round(np.mean(self.cache[spl][1]), 4)
             return out
         timestamp = time.time()
         if timeout is not None:
-            scores = func_timeout(timeout, self.cross_validate, (pl, self.X, self.y, [self.scoring] + self.side_scores))
+            scores = func_timeout(timeout, self.evaluation_fun, (pl, self.X, self.y, [self.scoring] + self.side_scores))
         else:
-            scores = self.cross_validate(pl, self.X, self.y, [self.scoring] + self.side_scores)
+            scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
         if scores is None:
-            return {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
+            return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
         runtime = time.time() - start_outer
+        if type(scores) != dict:
+            raise ValueError(f"scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.\nProbably you inserted an evaluation_fun argument that does not return a proper dictionary.")
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
-        self.tellEvaluation(pl, scores[self.scoring], timestamp)
+        self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
         return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
 
     def getBestCandidate(self):
@@ -997,7 +1013,7 @@ sklearn.preprocessing.PowerTransformer, "classifier": sklearn.naive_bayes.Multin
 
 class HPOProcess:
     
-    def __init__(self, step_name, comp, X, y, scoring, side_scores, execution_timeout, mandatory_pre_processing, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
+    def __init__(self, step_name, comp, X, y, scoring, side_scores, evaluation_fun, execution_timeout, mandatory_pre_processing, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
         self.step_name = step_name
         self.index_in_steps = index_in_steps
         self.comp = comp
@@ -1020,7 +1036,7 @@ class HPOProcess:
         self.max_its_without_imp = max_its_without_imp
         self.min_its = min_its
         self.scoring = scoring
-        self.pool = EvaluationPool(X, y, scoring, side_scores)
+        self.pool = EvaluationPool(X, y, scoring = scoring, side_scores = side_scores, evaluation_fun = evaluation_fun)
         self.its = 0
         self.allow_exhaustive_search = allow_exhaustive_search
         
@@ -1067,7 +1083,7 @@ class HPOProcess:
         scores = self.evalComp(params)
         if type(scores) != dict:
             raise ValueError(f"The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}")
-        score = scores[self.scoring]
+        score = scores[get_scoring_name(self.scoring)]
         runtime = time.time() - time_start_eval
         self.eval_runtimes.append(runtime)
         self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")

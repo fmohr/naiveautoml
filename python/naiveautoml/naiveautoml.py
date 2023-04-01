@@ -26,7 +26,7 @@ from naiveautoml.commons import *
 
 class NaiveAutoML:
 
-    def __init__(self, search_space = None, scoring = None, side_scores = None , num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, standard_regressor = sklearn.linear_model.LinearRegression(), logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False, sparse = False, task_type = "auto"):
+    def __init__(self, search_space = None, scoring = None, side_scores = None, evaluation_fun = None, num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, standard_regressor = sklearn.linear_model.LinearRegression(), logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False, sparse = False, task_type = "auto"):
         if type(search_space) == str:
             f = open(search_space)
             self.search_space = json.load(f)
@@ -35,6 +35,7 @@ class NaiveAutoML:
             
         self.scoring = scoring
         self.side_scores = side_scores
+        self.evaluation_fun = evaluation_fun
         self.num_cpus = num_cpus
         self.execution_timeout = execution_timeout
         self.max_hpo_iterations = max_hpo_iterations
@@ -59,14 +60,19 @@ class NaiveAutoML:
         self.logger_name = logger_name
         self.logger = logging.getLogger('naiveautoml' if logger_name is None else logger_name)
         
-    def register_search_space(self, X, y):
-        
+
+    def get_task_type(self, X, y):
         # infer task type
         if self.task_type == "auto":
-            task_type = "regression" if len(np.unique(y)) > 100 else "classification"
+            return "regression" if len(np.unique(y)) > 100 else "classification"
         else:
-            task_type = self.task_type
+            return self.task_type
         
+    def register_search_space(self, X, y):
+        
+
+        task_type = self.get_task_type(X, y)
+        self.logger.info(f"Automatically inferred task type: {task_type}")
         
         ''' search_space is a string or a list of dictionaries
             - if it is a dict, the last one for the learner and all the others for pre-processing. Each dictionary has an entry "name" and an entry "components", which is a list of components with their parameters.
@@ -85,7 +91,7 @@ class NaiveAutoML:
         
     def check_combinations(self, X, y):
         
-        pool = EvaluationPool(X, y, self.scoring, self.side_scores)
+        pool = EvaluationPool(X, y, scoring = self.scoring, side_scores = self.side_scores, evaluation_fun = self.evaluation_fun)
         algorithms_per_stage = []
         names = []
         for step in self.search_space:
@@ -187,7 +193,7 @@ class NaiveAutoML:
                 components = step["components"]
             
             # find best default parametrization for this slot (depending on choice of previously configured slots)
-            pool = EvaluationPool(X, y, self.scoring, self.side_scores, logger_name = None if self.logger_name is None else self.logger_name + ".pool")
+            pool = EvaluationPool(X, y, scoring = self.scoring, side_scores = self.side_scores, evaluation_fun = self.evaluation_fun, logger_name = None if self.logger_name is None else self.logger_name + ".pool")
             best_score = -np.inf
             decision = None
             for comp in components:
@@ -208,7 +214,7 @@ class NaiveAutoML:
                 except FunctionTimedOut:
                     self.logger.debug("TIMEOUT!")
                     scores = {scoring: np.nan for scoring in [self.scoring] + (self.side_scores if self.side_scores is not None else [])}
-                score = scores[self.scoring]
+                score = scores[get_scoring_name(self.scoring)]
                 self.logger.debug(f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}")
                 
                 # update history
@@ -230,6 +236,8 @@ class NaiveAutoML:
                     pbar.update(1)
                     
             if decision is None:
+                if step_name == "learner":
+                    raise Exception("No learner was chosen in the initial phase. This is typically caused by too low timeouts or bugs in a custom scoring function (if applicable).")
                 self.logger.debug("No component chosen for this slot. Leaving it blank")
             else:
                 self.logger.debug(f"Added {decision['class']} as the decision for step {step_name}")
@@ -270,7 +278,23 @@ class NaiveAutoML:
             else:
                 other_instances = [(step_name, None), ("learner", self.standard_classifier())]
             index = 0 # it is (rather by coincidence) the first step we want to optimize
-            hpo = HPOProcess(step_name, comp, X, y, self.scoring, self.side_scores, self.execution_timeout, self.mandatory_pre_processing, other_instances, index, 1800, 1000, allow_exhaustive_search = (self.max_hpo_iterations is None), logger_name =  None if self.logger_name is None else self.logger_name + ".hpo")
+            hpo = HPOProcess(
+                step_name,
+                comp,
+                X,
+                y,
+                scoring = self.scoring,
+                side_scores = self.side_scores,
+                evaluation_fun = self.evaluation_fun,
+                execution_timeout = self.execution_timeout,
+                mandatory_pre_processing = self.mandatory_pre_processing,
+                other_step_component_instances = other_instances,
+                index_in_steps = index,
+                max_time_without_imp = 1800,
+                max_its_without_imp = 1000,
+                allow_exhaustive_search = (self.max_hpo_iterations is None),
+                logger_name =  None if self.logger_name is None else self.logger_name + ".hpo"
+            )
             hpo.best_score = components_with_score[step_name] # performance of default config
             hpo_processes[step_name] = hpo
         
@@ -303,7 +327,7 @@ class NaiveAutoML:
                     res = hpo.step(remaining_time)
                     if res is not None:
                         pl, scores, runtime = res
-                        score = scores[self.scoring]
+                        score = scores[get_scoring_name(self.scoring)]
                         if score > self.best_score_overall:
                             self.best_score_overall = score
                         self.history.append({"time": time.time() - self.start_time, "pl": str(pl), "score_internal": score, "scores": scores, "new_best": score > self.best_score_overall})
@@ -334,7 +358,7 @@ class NaiveAutoML:
             pbar.close()
         
 
-    def fit(self, X, y):
+    def fit(self, X, y, categorical_features = None):
         
         # register search space
         self.register_search_space(X, y)
@@ -345,21 +369,41 @@ class NaiveAutoML:
         self.history = []
         self.start_time = time.time()
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
-        self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
         if self.scoring is None:
-            if self.task_type == "classification":
+            task_type = self.get_task_type(X, y)
+            if task_type == "classification":
                 self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
             else:
                 self.scoring = "neg_mean_squared_error"
         
-        # determine fixed pre-processing steps for imputation and binarization
-        types = [set([type(v) for v in r]) for r in X.T]
-        numeric_features = [c for c, t in enumerate(types) if len(t) == 1 and list(t)[0] != str]
-        numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
-        categorical_features = [i for i in range(X.shape[1]) if i not in numeric_features]
+        # show start message
+        self.logger.info(f"""Optimizing pipeline for data with shape {X.shape}.
+        Timeout: {self.timeout}
+        Timeout per execution: {self.execution_timeout}
+        Scoring: {self.scoring}""")
+        
+        # determine categorical attributes and necessity of binarization
+        self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
+        if type(X) == pd.DataFrame:
+            if categorical_features is None:
+                categorical_features = list(X.select_dtypes(exclude=np.number).columns)
+            else:
+                categorical_features = [c if type(c) != int else X.columns[c] for c in categorical_features]
+            numeric_features = [c for c in X.columns if not c in categorical_features]
+                
+        elif type(X) == np.ndarray or self.sparse_training_data:
+            if categorical_features is None:
+                types = [set([type(v) for v in r]) for r in X.T]
+                categorical_features = [c for c, t in enumerate(types) if len(t) != 1 or list(t)[0] == str]
+            numeric_features = [c for c in range(X.shape[1]) if not c in categorical_features]
+        else:
+            raise ValueError(f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
+        
+        # check necessity of imputation
         missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
         self.logger.info(f"There are {len(categorical_features)} categorical features, which will be binarized.")
         self.logger.info(f"Missing values for the different attributes are {missing_values_per_feature}.")
+        numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
         if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
             categorical_transformer = Pipeline([
                 ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
@@ -407,17 +451,17 @@ class NaiveAutoML:
             
         self.end_time = time.time()
         self.chosen_model = self.pl
+        self.history = pd.DataFrame({k: [e[k] for e in self.history] for k in ["time", "pl", "score_internal", "scores", "new_best"]})
         self.logger.info(f"Runtime was {self.end_time - self.start_time} seconds")
         
     def eval_history(self, X, y):
-        pool = EvaluationPool(X, y, self.scoring, self.side_scores)
+        pool = EvaluationPool(X, y, scoring = self.scoring, side_scores = self.side_scores, evaluation_fun = self.evaluation_fun)
         scores = []
         for entry in self.history:
             scores.append(pool.evaluate(entry["pl"]))
         return scores
 
     def predict(self, X):
-        print(self.pl)
         return self.pl.predict(X)
     
     def predict_proba(self, X):
