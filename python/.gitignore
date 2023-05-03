@@ -1,9 +1,5 @@
-/__pycache__/
-/icml2021.csv
-/.ipynb_checkpoints/
-/parallelism.ipynb
-/naiveautoml.log
-/results.csv
-naiveautoml/__pycache__/
+__pycache__
+.ipynb_checkpoints
 MANIFEST
 dist
+.idea
