@@ -21,9 +21,11 @@ class NaiveAutoML:
                  num_cpus=8,
                  execution_timeout=10,
                  max_hpo_iterations=100,
+                 max_hpo_iterations_without_imp=100,
+                 max_hpo_time_without_imp=1800,
                  timeout=None,
                  standard_classifier=sklearn.neighbors.KNeighborsClassifier,
-                 standard_regressor = sklearn.linear_model.LinearRegression,
+                 standard_regressor=sklearn.linear_model.LinearRegression,
                  logger_name=None,
                  show_progress=False,
                  opt_ordering=None,
@@ -35,13 +37,15 @@ class NaiveAutoML:
             self.search_space = json.load(f)
         else:
             self.search_space = search_space
-            
+
         self.scoring = scoring
         self.side_scores = side_scores
         self.evaluation_fun = evaluation_fun
         self.num_cpus = num_cpus
         self.execution_timeout = execution_timeout
         self.max_hpo_iterations = max_hpo_iterations
+        self.max_hpo_iterations_without_imp = max_hpo_iterations_without_imp
+        self.max_hpo_time_without_imp = max_hpo_time_without_imp
         self.strictly_naive = strictly_naive
         self.timeout = timeout
         self.show_progress = show_progress
@@ -343,8 +347,8 @@ class NaiveAutoML:
                 mandatory_pre_processing=self.mandatory_pre_processing,
                 other_step_component_instances=other_instances,
                 index_in_steps=index,
-                max_time_without_imp=1800,
-                max_its_without_imp=1000,
+                max_time_without_imp=self.max_hpo_time_without_imp,
+                max_its_without_imp=self.max_hpo_iterations_without_imp,
                 allow_exhaustive_search=(self.max_hpo_iterations is None),
                 logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
             )
