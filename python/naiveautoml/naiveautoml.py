@@ -38,8 +38,13 @@ class NaiveAutoML:
         else:
             self.search_space = search_space
 
+        # check validity of scorings
         self.scoring = scoring
         self.side_scores = side_scores
+        for s in [scoring] + (side_scores if side_scores is not None else []):
+            if s is not None:
+                build_scorer(s) # check whether this scorer can be built
+        
         self.evaluation_fun = evaluation_fun
         self.num_cpus = num_cpus
         self.execution_timeout = execution_timeout

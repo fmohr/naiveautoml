@@ -44,6 +44,10 @@ def get_scoring_name(scoring):
     return scoring if type(scoring) == str else scoring["name"]
 
 
+def build_scorer(scoring):
+    return get_scorer(scoring) if type(scoring) == str else make_scorer(
+        **{key: val for key, val in scoring.items() if key != "name"})
+
 class EvaluationPool:
 
     def __init__(self,
@@ -116,7 +120,7 @@ class EvaluationPool:
                 
                 # compute values for each metric
                 for scoring in scorings:
-                    scorer = get_scorer(scoring) if type(scoring) == str else make_scorer(**{key: val for key, val in scoring.items() if key != "name"})
+                    scorer = build_scorer(scoring)
                     try:
                         score = scorer(pl_copy, X_test, y_test)
                     except KeyboardInterrupt:
@@ -1057,7 +1061,7 @@ class HPOProcess:
         self.max_its_without_imp = max_its_without_imp
         self.min_its = min_its
         self.scoring = scoring
-        self.pool = EvaluationPool(task_type, X, y, scoring = scoring, side_scores = side_scores, evaluation_fun = evaluation_fun)
+        self.pool = EvaluationPool(task_type, X, y, scoring=scoring, side_scores = side_scores, evaluation_fun = evaluation_fun)
         self.its = 0
         self.allow_exhaustive_search = allow_exhaustive_search
         
