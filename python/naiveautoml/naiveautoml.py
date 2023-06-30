@@ -331,9 +331,9 @@ class NaiveAutoML:
                         if score > self.best_score_overall:
                             self.best_score_overall = score
                         self.history.append({"time": time.time() - self.start_time, "pl": str(pl), "score_internal": score, "scores": scores, "new_best": score > self.best_score_overall})
-                        if not hpo.active:
-                            self.logger.info(f"Deactivating {name}")
-                            inactive.append(name)
+                    if not hpo.active:
+                        self.logger.info(f"Deactivating {name}")
+                        inactive.append(name)
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
