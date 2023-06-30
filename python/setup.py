@@ -8,7 +8,7 @@ setup(
   author = 'Felix Mohr',
   author_email = 'mail@felixmohr.de',
   url = 'https://github.com/fmohr/naiveautoml',
-  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.15.tar.gz',
+  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.16.tar.gz',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple'],
   install_requires=[
           'numpy',
