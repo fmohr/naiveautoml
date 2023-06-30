@@ -2,22 +2,25 @@ from distutils.core import setup
 setup(
   name = 'naiveautoml',
   packages = ['naiveautoml'],
-  version = '0.0.13',
+  version = '0.0.16',
   license='MIT',
   description = 'The official package for the Naive AutoML paper',
   author = 'Felix Mohr',
   author_email = 'mail@felixmohr.de',
   url = 'https://github.com/fmohr/naiveautoml',
-  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.13.tar.gz',
+  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.15.tar.gz',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple'],
   install_requires=[
           'numpy',
+          'pandas',
           'scikit-learn',
           'configspace',
           'scipy',
           'func_timeout',
           'psutil',
-          'tqdm'
+          'tqdm',
+          'parameterized',
+          'openml'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',
