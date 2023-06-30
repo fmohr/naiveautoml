@@ -1,32 +1,35 @@
-# core
-import numpy as np
-import pandas as pd
 import random
-import json
-import itertools as it
-import logging
 import scipy.sparse
 from tqdm import tqdm
-import time
 import importlib.resources as pkg_resources
 
 # sklearn
-import sklearn
-from sklearn import *
-from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-
-# config space
-import ConfigSpace
-from ConfigSpace.util import *
-from ConfigSpace.read_and_write import json as config_json
 
 # naiveautoml commons
 from naiveautoml.commons import *
+import traceback
+
 
 class NaiveAutoML:
 
-    def __init__(self, search_space = None, scoring = None, side_scores = None, evaluation_fun = None, num_cpus = 8, execution_timeout = 10, max_hpo_iterations = 100, timeout = None, standard_classifier=sklearn.neighbors.KNeighborsClassifier, standard_regressor = sklearn.linear_model.LinearRegression(), logger_name = None, show_progress = False, opt_ordering = None, strictly_naive=False, sparse = False, task_type = "auto"):
+    def __init__(self,
+                 search_space=None,
+                 scoring=None,
+                 side_scores=None,
+                 evaluation_fun=None,
+                 num_cpus=8,
+                 execution_timeout=10,
+                 max_hpo_iterations=100,
+                 timeout=None,
+                 standard_classifier=sklearn.neighbors.KNeighborsClassifier,
+                 standard_regressor = sklearn.linear_model.LinearRegression,
+                 logger_name=None,
+                 show_progress=False,
+                 opt_ordering=None,
+                 strictly_naive=False,
+                 sparse=False,
+                 task_type="auto"):
         if type(search_space) == str:
             f = open(search_space)
             self.search_space = json.load(f)
@@ -42,11 +45,16 @@ class NaiveAutoML:
         self.strictly_naive = strictly_naive
         self.timeout = timeout
         self.show_progress = show_progress
-        
-        self.chosen_model = None
-        self.chosen_attributes = None
         self.stage_entrypoints = {}
         self.standard_classifier = standard_classifier
+        self.standard_regressor = standard_regressor
+
+        # state variables
+        self.start_time = None
+        self.deadline = None
+        self.best_score_overall = None
+        self.chosen_model = None
+        self.chosen_attributes = None
         
         # mandatory pre-processing steps
         self.sparse = sparse # do one-hot encoding via sparse representations (default is False since this is not supported by all algorithms)
@@ -55,18 +63,36 @@ class NaiveAutoML:
         self.task_type = task_type
         self.opt_ordering = opt_ordering
 
-                
-        ## init logger
+        # init logger
         self.logger_name = logger_name
         self.logger = logging.getLogger('naiveautoml' if logger_name is None else logger_name)
-        
 
     def get_task_type(self, X, y):
+        """
+        :param X: the descriptions of the instances
+        :param y: the labels of the instances
+        :return:
+        """
         # infer task type
         if self.task_type == "auto":
             return "regression" if len(np.unique(y)) > 100 else "classification"
         else:
             return self.task_type
+
+    def get_evaluation_pool(self, X, y):
+        task_type = self.get_task_type(X, y)
+        return EvaluationPool(
+            task_type,
+            X,
+            y,
+            scoring=self.scoring,
+            side_scores=self.side_scores,
+            evaluation_fun=self.evaluation_fun,
+            logger_name=None if self.logger_name is None else self.logger_name + ".pool"
+        )
+
+    def get_standard_learner_instance(self, X, y):
+        return self.standard_classifier() if self.get_task_type(X, y) == "classification" else self.standard_regressor()
         
     def register_search_space(self, X, y):
         
@@ -91,7 +117,7 @@ class NaiveAutoML:
         
     def check_combinations(self, X, y):
         
-        pool = EvaluationPool(X, y, scoring = self.scoring, side_scores = self.side_scores, evaluation_fun = self.evaluation_fun)
+        pool = self.get_evaluation_pool(X, y)
         algorithms_per_stage = []
         names = []
         for step in self.search_space:
@@ -128,12 +154,12 @@ class NaiveAutoML:
             if step_name == "learner":
                 steps = [("learner", build_estimator(comp, None, X, y))]
             elif comp is None:
-                steps = [("learner", self.standard_classifier())]
+                steps = [("learner", self.get_standard_learner_instance(X, y))]
             else:
-                steps = [(step_name, build_estimator(comp, None, X, y)), ("learner", self.standard_classifier())]
+                steps = [(step_name, build_estimator(comp, None, X, y)), ("learner", self.get_standard_learner_instance(X, y))]
             return Pipeline(steps = self.mandatory_pre_processing + steps)
         
-        else: ## semi-naive case (consider previous decisions)
+        else: # semi-naive case (consider previous decisions)
             steps_tmp = [(s[0], build_estimator(s[1], None, X, y)) for s in decisions]
             if comp is not None:
                 steps_tmp.append((step_name, build_estimator(comp, None, X, y)))
@@ -142,8 +168,7 @@ class NaiveAutoML:
                 if is_component_defined_in_steps(steps_tmp, step_inner["name"]):
                     steps_ordered.append(get_step_with_name(steps_tmp, step_inner["name"]))
             return Pipeline(steps = self.mandatory_pre_processing + steps_ordered)
-    
-    
+
     def build_pipeline(self, hpo_processes, X, y):
         steps = self.get_instances_of_currently_selected_components_per_step(hpo_processes, X, y)
         pl = Pipeline(self.mandatory_pre_processing + steps)
@@ -154,6 +179,18 @@ class NaiveAutoML:
             self.logger.debug("Invalid pipeline, removing first element!")
             pl = Pipeline(steps=self.mandatory_pre_processing + steps[i:])
         return pl
+
+    def get_pipeline_descriptor(self, pl):
+        descriptor = []
+        pl_step_names = [s[0] for s in pl.steps]
+        for step in self.opt_ordering:
+            if step in pl_step_names:
+                component = pl[pl_step_names.index(step)]
+                descriptor.append(component.__class__.__name__)
+                descriptor.append(component.get_params())
+            else:
+                descriptor.extend([None, None])
+        return descriptor
     
     def choose_algorithms(self, X, y):
         
@@ -163,42 +200,36 @@ class NaiveAutoML:
         self.logger.info("--------------------------------------------------")
         decisions = []
         components_with_score = {}
-        
-                
+
         if self.show_progress:
             print("Progress for algorithm selection:")
             pbar = tqdm(total=sum([len(step["components"]) for step in self.search_space]))
-            
-        
+
         # retrieve ordering of slots for optimization
         if self.opt_ordering is None:
             opt_ordering = ["learner"]
             for step in self.search_space:
                 if step["name"] != "learner":
                     opt_ordering.append(step["name"])
-        else:
-            opt_ordering = self.opt_ordering
-            
-                
-        for step_index, step_name in enumerate(opt_ordering):
-            
+            self.opt_ordering = opt_ordering
+
+        for step_index, step_name in enumerate(self.opt_ordering):
+
             # create list of components to try for this slot
             step = [step for step in self.search_space if step["name"] == step_name][0]
             self.logger.info("--------------------------------------------------")
             self.logger.info(f"Selecting component for step with name: {step_name}")
             self.logger.info("--------------------------------------------------")
-            if not step_name in ["learner"]:
+            if step_name not in ["learner"]:
                 components = [None] + step["components"]
             else:
                 components = step["components"]
             
             # find best default parametrization for this slot (depending on choice of previously configured slots)
-            pool = EvaluationPool(X, y, scoring = self.scoring, side_scores = self.side_scores, evaluation_fun = self.evaluation_fun, logger_name = None if self.logger_name is None else self.logger_name + ".pool")
+            pool = self.get_evaluation_pool(X, y)
             best_score = -np.inf
             decision = None
             for comp in components:
-                if comp is not None and "MultinomialNB" in comp["class"]:
-                    continue
                 if self.deadline is not None:
                     remaining_time = self.deadline - 10 - time.time()
                     if remaining_time is not None and remaining_time < 0:
@@ -209,16 +240,36 @@ class NaiveAutoML:
                 
                 # get and evaluate pipeline for this step
                 pl = self.get_pipeline_for_decision_in_step(step_name, comp, X, y, decisions)
+                exception = None
+                timeout = False
+                status = "ok"
                 try:
-                    scores = pool.evaluate(pl, min(self.execution_timeout, remaining_time if self.deadline is not None else 10**10))
+                    timeout = min(self.execution_timeout, remaining_time if self.deadline is not None else 10**10)
+                    scores = pool.evaluate(pl, timeout)
+                except KeyboardInterrupt:
+                    raise
                 except FunctionTimedOut:
                     self.logger.debug("TIMEOUT!")
+                    timeout = True
+                    status = "timeout"
+                except:
+                    exception = traceback.format_exc()
+                    status = "exception"
+                if status != "ok":
                     scores = {scoring: np.nan for scoring in [self.scoring] + (self.side_scores if self.side_scores is not None else [])}
                 score = scores[get_scoring_name(self.scoring)]
                 self.logger.debug(f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}")
                 
                 # update history
-                self.history.append({"time": time.time() - self.start_time, "pl": str(pl), "score_internal": score, "scores": scores, "new_best": score > self.best_score_overall})
+                self.history.append({
+                    "time": time.time() - self.start_time,
+                    "pl": self.get_pipeline_descriptor(pl),
+                    "score_internal": score,
+                    "scores": scores,
+                    "new_best": score > self.best_score_overall,
+                    "status": status,
+                    "exception": exception
+                })
                 
                 # update best score
                 if not np.isnan(score) and score > best_score:
@@ -237,7 +288,7 @@ class NaiveAutoML:
                     
             if decision is None:
                 if step_name == "learner":
-                    raise Exception("No learner was chosen in the initial phase. This is typically caused by too low timeouts or bugs in a custom scoring function (if applicable).")
+                    self.logger.error("No learner was chosen in the initial phase. This is typically caused by too low timeouts or bugs in a custom scoring function (if applicable).")
                 self.logger.debug("No component chosen for this slot. Leaving it blank")
             else:
                 self.logger.debug(f"Added {decision['class']} as the decision for step {step_name}")
@@ -264,6 +315,7 @@ class NaiveAutoML:
         self.logger.info("--------------------------------------------------")
         self.logger.info("Entering HPO phase")
         self.logger.info("--------------------------------------------------")
+        task_type = self.get_task_type(X, y)
         
         # read variables from state
         decisions = self.decisions
@@ -276,24 +328,25 @@ class NaiveAutoML:
             if step_name == "learner":
                 other_instances = [(step_name, None)]
             else:
-                other_instances = [(step_name, None), ("learner", self.standard_classifier())]
+                other_instances = [(step_name, None), ("learner", self.get_standard_learner_instance(X, y))]
             index = 0 # it is (rather by coincidence) the first step we want to optimize
             hpo = HPOProcess(
+                task_type,
                 step_name,
                 comp,
                 X,
                 y,
-                scoring = self.scoring,
-                side_scores = self.side_scores,
-                evaluation_fun = self.evaluation_fun,
-                execution_timeout = self.execution_timeout,
-                mandatory_pre_processing = self.mandatory_pre_processing,
-                other_step_component_instances = other_instances,
-                index_in_steps = index,
-                max_time_without_imp = 1800,
-                max_its_without_imp = 1000,
-                allow_exhaustive_search = (self.max_hpo_iterations is None),
-                logger_name =  None if self.logger_name is None else self.logger_name + ".hpo"
+                scoring=self.scoring,
+                side_scores=self.side_scores,
+                evaluation_fun=self.evaluation_fun,
+                execution_timeout=self.execution_timeout,
+                mandatory_pre_processing=self.mandatory_pre_processing,
+                other_step_component_instances=other_instances,
+                index_in_steps=index,
+                max_time_without_imp=1800,
+                max_its_without_imp=1000,
+                allow_exhaustive_search=(self.max_hpo_iterations is None),
+                logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
             )
             hpo.best_score = components_with_score[step_name] # performance of default config
             hpo_processes[step_name] = hpo
@@ -304,11 +357,11 @@ class NaiveAutoML:
         active_for_optimization = [name for name, hpo in hpo_processes.items() if hpo.active]
         round_runtimes = []
         if self.show_progress:
-            print("Progress for parameter turning:")
+            print("Progress for parameter tuning:")
             pbar = tqdm(total = self.max_hpo_iterations)
             
         while active_for_optimization and (self.max_hpo_iterations is None or opt_round <= self.max_hpo_iterations):
-            self.logger.info("Entering optimization round " + str(opt_round))
+            self.logger.info(f"Entering optimization round {opt_round}")
             if self.deadline is not None:
                 remaining_time = self.deadline - (np.mean(round_runtimes) if round_runtimes else 0) - 10 - time.time()
                 if remaining_time < 0:
@@ -326,11 +379,19 @@ class NaiveAutoML:
                 try:
                     res = hpo.step(remaining_time)
                     if res is not None:
-                        pl, scores, runtime = res
+                        pl, status, scores, runtime, exception = res
                         score = scores[get_scoring_name(self.scoring)]
                         if score > self.best_score_overall:
                             self.best_score_overall = score
-                        self.history.append({"time": time.time() - self.start_time, "pl": str(pl), "score_internal": score, "scores": scores, "new_best": score > self.best_score_overall})
+                        self.history.append({
+                            "time": time.time() - self.start_time,
+                            "pl": self.get_pipeline_descriptor(pl),
+                            "score_internal": score,
+                            "scores": scores,
+                            "new_best": score > self.best_score_overall,
+                            "status": status,
+                            "exception": exception}
+                        )
                     if not hpo.active:
                         self.logger.info(f"Deactivating {name}")
                         inactive.append(name)
@@ -356,10 +417,9 @@ class NaiveAutoML:
         # close progress bar for HPO
         if self.show_progress:
             pbar.close()
-        
 
     def fit(self, X, y, categorical_features = None):
-        
+
         # register search space
         self.register_search_space(X, y)
 
@@ -429,6 +489,7 @@ class NaiveAutoML:
         
         # choose algorithms
         self.choose_algorithms(X, y)
+        self.steps_after_which_algorithm_selection_was_completed = len(self.history)
         
         # tune parameters
         self.tune_parameters(X, y)
@@ -451,11 +512,27 @@ class NaiveAutoML:
             
         self.end_time = time.time()
         self.chosen_model = self.pl
-        self.history = pd.DataFrame({k: [e[k] for e in self.history] for k in ["time", "pl", "score_internal", "scores", "new_best"]})
+
+        # compile history
+        history_keys = ["time"]
+        for step in self.opt_ordering:
+            history_keys.append(step + "_class")
+            history_keys.append(step + "_hps")
+        history_keys.extend([self.scoring] + (self.side_scores if self.side_scores is not None else []) + ["new_best", "status", "exception"])
+
+        history_rows = []
+        for row in self.history:
+            row_formatted = [row["time"]] + row["pl"] + [row["score_internal"]]
+            if self.side_scores is not None:
+                for s in self.side_scores:
+                    row_formatted.append(row["scores"][s])
+            row_formatted.extend([row["new_best"], row["status"], row["exception"]])
+            history_rows.append(row_formatted)
+        self.history = pd.DataFrame(history_rows, columns=history_keys)
         self.logger.info(f"Runtime was {self.end_time - self.start_time} seconds")
         
     def eval_history(self, X, y):
-        pool = EvaluationPool(X, y, scoring = self.scoring, side_scores = self.side_scores, evaluation_fun = self.evaluation_fun)
+        pool = self.get_evaluation_pool(X, y)
         scores = []
         for entry in self.history:
             scores.append(pool.evaluate(entry["pl"]))

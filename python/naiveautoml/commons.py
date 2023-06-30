@@ -22,6 +22,7 @@ import ConfigSpace
 from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
 import json
+import traceback
 
 def get_class( kls ):
     parts = kls.split('.')
@@ -45,7 +46,21 @@ def get_scoring_name(scoring):
 
 class EvaluationPool:
 
-    def __init__(self, X, y, scoring, evaluation_fun = None, side_scores = None, tolerance_tuning = 0.05, tolerance_estimation_error = 0.01, logger_name = None):
+    def __init__(self,
+                 task_type,
+                 X,
+                 y,
+                 scoring,
+                 evaluation_fun=None,
+                 side_scores=None,
+                 tolerance_tuning=0.05,
+                 tolerance_estimation_error=0.01,
+                 logger_name=None
+                 ):
+        domains_task_type = ["classification", "regression"]
+        if task_type not in domains_task_type:
+            raise ValueError(f"task_type must be in {domains_task_type}")
+        self.task_type = task_type
         self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
         if X is None:
             raise Exception("Parameter X must not be None")
@@ -77,20 +92,25 @@ class EvaluationPool:
             self.bestScore = score        
             self.best_spl = spl
                         
-    def cross_validate(self, pl, X, y, scorings, errors="message"): # just a wrapper to ease parallelism
-        warnings.filterwarnings('ignore', module = 'sklearn')
+    def cross_validate(self, pl, X, y, scorings, errors="raise"): # just a wrapper to ease parallelism
+        warnings.filterwarnings('ignore', module='sklearn')
+        warnings.filterwarnings('ignore', module='numpy')
         try:
             if type(scorings) != list:
                 scorings = [scorings]
-            skf = sklearn.model_selection.StratifiedKFold(n_splits=5, random_state=None, shuffle=True)
+
+            if self.task_type == "classification":
+                splitter = sklearn.model_selection.StratifiedKFold(n_splits=5, random_state=None, shuffle=True)
+            elif self.task_type:
+                splitter = sklearn.model_selection.KFold(n_splits=5, random_state=None, shuffle=True)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
-            for train_index, test_index in skf.split(X, y):
+            for train_index, test_index in splitter.split(X, y):
                 
                 X_train = X.iloc[train_index] if type(X) == pd.DataFrame else X[train_index]
                 y_train = y.iloc[train_index] if type(y) == pd.Series else y[train_index]
                 X_test = X.iloc[test_index] if type(X) == pd.DataFrame else X[test_index]
                 y_test = y.iloc[test_index] if type(y) == pd.Series else y[test_index]
-                
+
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
                 
@@ -121,11 +141,11 @@ class EvaluationPool:
             else:
                 raise
 
-    def evaluate(self, pl, timeout=None, deadline=None):
+    def evaluate(self, pl, timeout=None):
         if is_pipeline_forbidden(pl):
             self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
             return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
-        
+
         process = psutil.Process(os.getpid())
         self.logger.info(f"Initializing evaluation of {pl} with current memory consumption {int(process.memory_info().rss / 1024 / 1024)} MB. Now awaiting results.")
         
@@ -1013,7 +1033,8 @@ sklearn.preprocessing.PowerTransformer, "classifier": sklearn.naive_bayes.Multin
 
 class HPOProcess:
     
-    def __init__(self, step_name, comp, X, y, scoring, side_scores, evaluation_fun, execution_timeout, mandatory_pre_processing, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
+    def __init__(self, task_type, step_name, comp, X, y, scoring, side_scores, evaluation_fun, execution_timeout, mandatory_pre_processing, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
+        self.task_type = task_type
         self.step_name = step_name
         self.index_in_steps = index_in_steps
         self.comp = comp
@@ -1036,7 +1057,7 @@ class HPOProcess:
         self.max_its_without_imp = max_its_without_imp
         self.min_its = min_its
         self.scoring = scoring
-        self.pool = EvaluationPool(X, y, scoring = scoring, side_scores = side_scores, evaluation_fun = evaluation_fun)
+        self.pool = EvaluationPool(task_type, X, y, scoring = scoring, side_scores = side_scores, evaluation_fun = evaluation_fun)
         self.its = 0
         self.allow_exhaustive_search = allow_exhaustive_search
         
@@ -1060,10 +1081,15 @@ class HPOProcess:
         
     def evalComp(self, params):
         try:
-            return self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout)
+            return "ok", self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout), None
         except FunctionTimedOut:
             self.logger.info("TIMEOUT")
-            return {scoring: np.nan for scoring in [self.scoring] + self.side_scores}
+            return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, None
+        except KeyboardInterrupt:
+            raise
+        except:
+            return "exception", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, traceback.format_exc()
+
         
     def step(self, remaining_time = None):
         self.its += 1
@@ -1080,7 +1106,7 @@ class HPOProcess:
 
         # evaluate configured pipeline
         time_start_eval = time.time()
-        scores = self.evalComp(params)
+        status, scores, exception = self.evalComp(params)
         if type(scores) != dict:
             raise ValueError(f"The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}")
         score = scores[get_scoring_name(self.scoring)]
@@ -1110,7 +1136,7 @@ class HPOProcess:
                 configs = get_all_configurations(self.config_space)
                 self.logger.info(f"Now evaluation all {len(configs)} possible configurations.")
                 for params in configs:
-                    scores = self.evalComp(params)
+                    status, scores, exception = self.evalComp(params)
                     score = scores[self.scoring]
                     self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")
                     if score > self.best_score:
@@ -1118,7 +1144,7 @@ class HPOProcess:
                         self.best_score = score
                         self.best_params = params
                 self.logger.info("Configuration space completely exhausted.")
-        return self.get_parametrized_pipeline(params), scores, runtime
+        return self.get_parametrized_pipeline(params), status, scores, runtime, exception
     
     def get_best_config(self):
         return self.best_params
