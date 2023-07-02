@@ -32,11 +32,11 @@ class NaiveAutoML:
                  strictly_naive=False,
                  sparse=False,
                  task_type="auto"):
-        if type(search_space) == str:
-            f = open(search_space)
-            self.search_space = json.load(f)
-        else:
-            self.search_space = search_space
+
+        self.search_space = search_space
+        if isinstance(search_space, str):
+            with open(search_space) as f:
+                self.search_space = json.load(f)
 
         # check validity of scorings
         self.scoring = scoring
