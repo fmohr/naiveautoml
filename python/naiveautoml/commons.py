@@ -41,11 +41,11 @@ def get_step_with_name(steps, name):
     return candidates[0]
 
 def get_scoring_name(scoring):
-    return scoring if type(scoring) == str else scoring["name"]
+    return scoring if isinstance(scoring, str) else scoring["name"]
 
 
 def build_scorer(scoring):
-    return get_scorer(scoring) if type(scoring) == str else make_scorer(
+    return get_scorer(scoring) if isinstance(scoring, str) else make_scorer(
         **{key: val for key, val in scoring.items() if key != "name"})
 
 class EvaluationPool:
@@ -66,18 +66,18 @@ class EvaluationPool:
             raise ValueError(f"task_type must be in {domains_task_type}")
         self.task_type = task_type
         self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
-        if X is None:
-            raise Exception("Parameter X must not be None")
+
+        if not isinstance(X, (pd.DataFrame, np.ndarray, scipy.sparse.csr.csr_matrix, scipy.sparse.csc.csc_matrix, scipy.sparse.lil.lil_matrix)):
+            raise TypeError(f"X must be a numpy array but is {type(X)}")
         if y is None:
-            raise Exception("Parameter y must not be None")
-        if type(X) != pd.DataFrame and type(X) != np.ndarray and type(X) != scipy.sparse.csr.csr_matrix and type(X) != scipy.sparse.csc.csc_matrix and type(X) != scipy.sparse.lil.lil_matrix:
-            raise Exception("X must be a numpy array but is " + str(type(X)))
+            raise TypeError("Parameter y must not be None")
+
         self.X = X
         self.y = y
         self.scoring = scoring
         if side_scores is None:
             self.side_scores = []
-        elif type(side_scores) == list:
+        elif isinstance(side_scores, list):
             self.side_scores = side_scores
         else:
             self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
@@ -100,7 +100,7 @@ class EvaluationPool:
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
-            if type(scorings) != list:
+            if not isinstance(scorings, list):
                 scorings = [scorings]
 
             if self.task_type == "classification":
@@ -110,10 +110,10 @@ class EvaluationPool:
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
                 
-                X_train = X.iloc[train_index] if type(X) == pd.DataFrame else X[train_index]
-                y_train = y.iloc[train_index] if type(y) == pd.Series else y[train_index]
-                X_test = X.iloc[test_index] if type(X) == pd.DataFrame else X[test_index]
-                y_test = y.iloc[test_index] if type(y) == pd.Series else y[test_index]
+                X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
+                y_train = y.iloc[train_index] if isinstance(y, pd.Series) else y[train_index]
+                X_test = X.iloc[test_index] if isinstance(X, pd.DataFrame) else X[test_index]
+                y_test = y.iloc[test_index] if isinstance(y, pd.Series) else y[test_index]
 
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
@@ -167,8 +167,8 @@ class EvaluationPool:
         if scores is None:
             return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
         runtime = time.time() - start_outer
-        if type(scores) != dict:
-            raise ValueError(f"scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.\nProbably you inserted an evaluation_fun argument that does not return a proper dictionary.")
+        if not isinstance(scores, dict):
+            raise TypeError(f"scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.\nProbably you inserted an evaluation_fun argument that does not return a proper dictionary.")
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
         return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
@@ -970,17 +970,17 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
     
     
 def get_hyperparameter_space_size(config_space):
-    hps = config_space.get_hyperparameters();
+    hps = config_space.get_hyperparameters()
     if not hps:
         return 0
     size = 1
     for hp in hps:
-        if type(hp) in [ConfigSpace.hyperparameters.UnParametrizedHyperparameter, ConfigSpace.hyperparameters.Constant]:
+        if isinstance(hp, (ConfigSpace.hyperparameters.UnParametrizedHyperparameter, ConfigSpace.hyperparameters.Constant)):
             continue
             
-        if type(hp) == ConfigSpace.hyperparameters.CategoricalHyperparameter:
+        if isinstance(hp, ConfigSpace.hyperparameters.CategoricalHyperparameter):
             size *= len(list(hp.choices))
-        elif issubclass(hp.__class__, ConfigSpace.hyperparameters.IntegerHyperparameter):
+        elif isinstance(hp, ConfigSpace.hyperparameters.IntegerHyperparameter):
             size *= (hp.upper - hp.lower + 1)
         else:
             return np.inf
@@ -992,15 +992,15 @@ def get_all_configurations(config_space):
     domains = []
     for hp in config_space.get_hyperparameters():
         names.append(hp.name)
-        if type(hp) in [ConfigSpace.hyperparameters.UnParametrizedHyperparameter, ConfigSpace.hyperparameters.Constant]:
+        if isinstance(hp, (ConfigSpace.hyperparameters.UnParametrizedHyperparameter, ConfigSpace.hyperparameters.Constant)):
             domains.append([hp.value])
             
-        if type(hp) == ConfigSpace.hyperparameters.CategoricalHyperparameter:
+        if isinstance(hp, ConfigSpace.hyperparameters.CategoricalHyperparameter):
             domains.append(list(hp.choices))
-        elif issubclass(hp.__class__, ConfigSpace.hyperparameters.IntegerHyperparameter):
+        elif isinstance(hp, ConfigSpace.hyperparameters.IntegerHyperparameter):
             domains.append(list(range(hp.lower, hp.upper + 1)))
         else:
-            raise Exception("Unsupported type " + str(type(hp)))
+            raise TypeError(f"Unsupported hyperparameter type {type(hp)}")
     
     # compute product
     configs = []
@@ -1067,7 +1067,7 @@ class HPOProcess:
         
         if side_scores is None:
             self.side_scores = []
-        elif type(side_scores) == list:
+        elif isinstance(side_scores, list):
             self.side_scores = side_scores
         else:
             self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
@@ -1111,8 +1111,8 @@ class HPOProcess:
         # evaluate configured pipeline
         time_start_eval = time.time()
         status, scores, exception = self.evalComp(params)
-        if type(scores) != dict:
-            raise ValueError(f"The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}")
+        if not isinstance(scores, dict):
+            raise TypeError(f"The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}")
         score = scores[get_scoring_name(self.scoring)]
         runtime = time.time() - time_start_eval
         self.eval_runtimes.append(runtime)

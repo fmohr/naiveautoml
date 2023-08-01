@@ -32,11 +32,11 @@ class NaiveAutoML:
                  strictly_naive=False,
                  sparse=False,
                  task_type="auto"):
-        if type(search_space) == str:
-            f = open(search_space)
-            self.search_space = json.load(f)
-        else:
-            self.search_space = search_space
+
+        self.search_space = search_space
+        if isinstance(search_space, str):
+            with open(search_space) as f:
+                self.search_space = json.load(f)
 
         # check validity of scorings
         self.scoring = scoring
@@ -452,21 +452,21 @@ class NaiveAutoML:
         Scoring: {self.scoring}""")
         
         # determine categorical attributes and necessity of binarization
-        self.sparse_training_data = type(X) == scipy.sparse.csr.csr_matrix or type(X) == scipy.sparse.lil.lil_matrix
-        if type(X) == pd.DataFrame:
+        self.sparse_training_data = isinstance(X, (scipy.sparse.csr.csr_matrix, scipy.sparse.lil.lil_matrix))
+        if isinstance(X, pd.DataFrame):
             if categorical_features is None:
                 categorical_features = list(X.select_dtypes(exclude=np.number).columns)
             else:
-                categorical_features = [c if type(c) != int else X.columns[c] for c in categorical_features]
+                categorical_features = [c if not isinstance(c, int) else X.columns[c] for c in categorical_features]
             numeric_features = [c for c in X.columns if not c in categorical_features]
                 
-        elif type(X) == np.ndarray or self.sparse_training_data:
+        elif isinstance(X, np.ndarray) or self.sparse_training_data:
             if categorical_features is None:
                 types = [set([type(v) for v in r]) for r in X.T]
                 categorical_features = [c for c, t in enumerate(types) if len(t) != 1 or list(t)[0] == str]
             numeric_features = [c for c in range(X.shape[1]) if not c in categorical_features]
         else:
-            raise ValueError(f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
+            raise TypeError(f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
         
         # check necessity of imputation
         missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
