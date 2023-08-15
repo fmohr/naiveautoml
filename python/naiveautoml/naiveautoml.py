@@ -257,7 +257,7 @@ class NaiveAutoML:
                     scores = pool.evaluate(pl, timeout)
                 except KeyboardInterrupt:
                     raise
-                except FunctionTimedOut:
+                except pynisher.WallTimeoutException:
                     self.logger.debug("TIMEOUT!")
                     timeout = True
                     status = "timeout"

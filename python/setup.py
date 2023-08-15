@@ -16,7 +16,7 @@ setup(
           'scikit-learn',
           'configspace',
           'scipy',
-          'func_timeout',
+          'pynisher',
           'psutil',
           'tqdm',
           'parameterized',

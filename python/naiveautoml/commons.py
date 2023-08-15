@@ -2,7 +2,7 @@
 import pandas as pd
 import logging, warnings
 import itertools as it
-import os, psutil
+import os, psutil, gc
 import scipy.sparse
 import time
 
@@ -14,9 +14,6 @@ from sklearn.metrics import get_scorer
 from sklearn.metrics import make_scorer
 
 
-# timeout functions
-from func_timeout import func_timeout, FunctionTimedOut
-
 # configspace
 import ConfigSpace
 from ConfigSpace.util import *
@@ -24,7 +21,14 @@ from ConfigSpace.read_and_write import json as config_json
 import json
 import traceback
 
-def get_class( kls ):
+
+import multiprocessing
+from functools import wraps
+
+import pynisher
+
+
+def get_class(kls):
     parts = kls.split('.')
     module = ".".join(parts[:-1])
     m = __import__( module )
@@ -32,13 +36,16 @@ def get_class( kls ):
         m = getattr(m, comp)            
     return m
 
+
 def is_component_defined_in_steps(steps, name):
     candidates = [s[1] for s in steps if s[0] == name]
     return len(candidates) > 0
 
+
 def get_step_with_name(steps, name):
     candidates = [s for s in steps if s[0] == name]
     return candidates[0]
+
 
 def get_scoring_name(scoring):
     return scoring if isinstance(scoring, str) else scoring["name"]
@@ -47,6 +54,7 @@ def get_scoring_name(scoring):
 def build_scorer(scoring):
     return get_scorer(scoring) if isinstance(scoring, str) else make_scorer(
         **{key: val for key, val in scoring.items() if key != "name"})
+
 
 class EvaluationPool:
 
@@ -90,7 +98,7 @@ class EvaluationPool:
 
     def tellEvaluation(self, pl, scores, timestamp):
         spl = str(pl)
-        self.cache[spl] = (pl, scores, timestamp)
+        self.cache[spl] = (spl, scores, timestamp)
         score = np.mean(scores)
         if score > self.bestScore:
             self.bestScore = score        
@@ -161,7 +169,8 @@ class EvaluationPool:
             return out
         timestamp = time.time()
         if timeout is not None:
-            scores = func_timeout(timeout, self.evaluation_fun, (pl, self.X, self.y, [self.scoring] + self.side_scores))
+            with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
+                scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
         else:
             scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
         if scores is None:
@@ -172,13 +181,6 @@ class EvaluationPool:
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
         return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
-
-    def getBestCandidate(self):
-        return self.getBestCandidates(1)[0]
-        
-    def getBestCandidates(self, n):
-        candidates = sorted([key for key in self.cache], key=lambda k: np.mean(self.cache[k][1]), reverse=True)
-        return [self.cache[c] for c in candidates[:n]]
     
 def fullname(o):
     module = o.__module__
@@ -1086,7 +1088,7 @@ class HPOProcess:
     def evalComp(self, params):
         try:
             return "ok", self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout), None
-        except FunctionTimedOut:
+        except pynisher.WallTimeoutException:
             self.logger.info("TIMEOUT")
             return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, None
         except KeyboardInterrupt:
