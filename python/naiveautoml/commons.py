@@ -14,17 +14,16 @@ from sklearn.metrics import get_scorer
 from sklearn.metrics import make_scorer
 
 
-# timeout functions
-from func_timeout import func_timeout, FunctionTimedOut
-
 # configspace
-import ConfigSpace
 from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
 import json
 import traceback
 
-def get_class( kls ):
+import pynisher
+
+
+def get_class(kls):
     parts = kls.split('.')
     module = ".".join(parts[:-1])
     m = __import__( module )
@@ -32,13 +31,16 @@ def get_class( kls ):
         m = getattr(m, comp)            
     return m
 
+
 def is_component_defined_in_steps(steps, name):
     candidates = [s[1] for s in steps if s[0] == name]
     return len(candidates) > 0
 
+
 def get_step_with_name(steps, name):
     candidates = [s for s in steps if s[0] == name]
     return candidates[0]
+
 
 def get_scoring_name(scoring):
     return scoring if isinstance(scoring, str) else scoring["name"]
@@ -47,6 +49,7 @@ def get_scoring_name(scoring):
 def build_scorer(scoring):
     return get_scorer(scoring) if isinstance(scoring, str) else make_scorer(
         **{key: val for key, val in scoring.items() if key != "name"})
+
 
 class EvaluationPool:
 
@@ -59,7 +62,8 @@ class EvaluationPool:
                  side_scores=None,
                  tolerance_tuning=0.05,
                  tolerance_estimation_error=0.01,
-                 logger_name=None
+                 logger_name=None,
+                 use_caching=True
                  ):
         domains_task_type = ["classification", "regression"]
         if task_type not in domains_task_type:
@@ -87,10 +91,11 @@ class EvaluationPool:
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
         self.evaluation_fun = self.cross_validate if evaluation_fun is None else evaluation_fun
+        self.use_caching = use_caching
 
     def tellEvaluation(self, pl, scores, timestamp):
         spl = str(pl)
-        self.cache[spl] = (pl, scores, timestamp)
+        self.cache[spl] = (spl, scores, timestamp)
         score = np.mean(scores)
         if score > self.bestScore:
             self.bestScore = score        
@@ -155,13 +160,14 @@ class EvaluationPool:
         
         start_outer = time.time()
         spl = str(pl)
-        if spl in self.cache:
+        if self.use_caching and spl in self.cache:
             out = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
             out[get_scoring_name(self.scoring)] = np.round(np.mean(self.cache[spl][1]), 4)
             return out
         timestamp = time.time()
         if timeout is not None:
-            scores = func_timeout(timeout, self.evaluation_fun, (pl, self.X, self.y, [self.scoring] + self.side_scores))
+            with pynisher.limit(self.evaluation_fun, wall_time=timeout, context="fork") as limited_evaluation:
+                scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
         else:
             scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
         if scores is None:
@@ -172,13 +178,6 @@ class EvaluationPool:
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
         return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
-
-    def getBestCandidate(self):
-        return self.getBestCandidates(1)[0]
-        
-    def getBestCandidates(self, n):
-        candidates = sorted([key for key in self.cache], key=lambda k: np.mean(self.cache[k][1]), reverse=True)
-        return [self.cache[c] for c in candidates[:n]]
     
 def fullname(o):
     module = o.__module__
@@ -707,7 +706,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
     if clazz == sklearn.discriminant_analysis.LinearDiscriminantAnalysis:
         if params["shrinkage"] in (None, "none", "None"):
             shrinkage_ = None
-            solver = 'svd'
+            solver = 'lsqr'
         elif params["shrinkage"] == "auto":
             shrinkage_ = 'auto'
             solver = 'lsqr'
@@ -715,7 +714,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             shrinkage_ = float(params["shrinkage_factor"])
             solver = 'lsqr'
         else:
-            raise ValueError(self.shrinkage)
+            raise ValueError()
 
         tol = float(params["tol"])
         return sklearn.discriminant_analysis.LinearDiscriminantAnalysis(shrinkage=shrinkage_, tol=tol, solver=solver)
@@ -1086,7 +1085,7 @@ class HPOProcess:
     def evalComp(self, params):
         try:
             return "ok", self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout), None
-        except FunctionTimedOut:
+        except pynisher.WallTimeoutException:
             self.logger.info("TIMEOUT")
             return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, None
         except KeyboardInterrupt:
