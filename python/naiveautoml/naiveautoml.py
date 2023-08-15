@@ -29,9 +29,33 @@ class NaiveAutoML:
                  logger_name=None,
                  show_progress=False,
                  opt_ordering=None,
-                 strictly_naive=False,
-                 sparse=False,
-                 task_type="auto"):
+                 strictly_naive: bool = False,
+                 sparse: bool = None,
+                 task_type: str = "auto",
+                 raise_errors: bool = False):
+        """
+
+        :param search_space:
+        :param scoring:
+        :param side_scores:
+        :param evaluation_fun:
+        :param num_cpus:
+        :param execution_timeout:
+        :param max_hpo_iterations:
+        :param max_hpo_iterations_without_imp:
+        :param max_hpo_time_without_imp:
+        :param timeout:
+        :param standard_classifier:
+        :param standard_regressor:
+        :param logger_name:
+        :param show_progress:
+        :param opt_ordering:
+        :param strictly_naive:
+        :param sparse: whether data is treated sparsely in pre-processing.
+                Default is `None`, and in that case, the sparsity is inferred from the sparsity of the data itself.
+        :param task_type:
+        :param raise_errors:
+        """
 
         self.search_space = search_space
         if isinstance(search_space, str):
@@ -57,6 +81,7 @@ class NaiveAutoML:
         self.stage_entrypoints = {}
         self.standard_classifier = standard_classifier
         self.standard_regressor = standard_regressor
+        self.raise_errors = raise_errors
 
         # state variables
         self.start_time = None
@@ -66,7 +91,7 @@ class NaiveAutoML:
         self.chosen_attributes = None
         
         # mandatory pre-processing steps
-        self.sparse = sparse # do one-hot encoding via sparse representations (default is False since this is not supported by all algorithms)
+        self.sparse = sparse
         self.mandatory_pre_processing = None
         
         self.task_type = task_type
@@ -254,7 +279,10 @@ class NaiveAutoML:
                 timeout = False
                 status = "ok"
                 try:
-                    timeout = min(self.execution_timeout, remaining_time if self.deadline is not None else 10**10)
+                    if self.execution_timeout is None:
+                        timeout = None
+                    else:
+                        timeout = min(self.execution_timeout, remaining_time if self.deadline is not None else 10**10)
                     scores = pool.evaluate(pl, timeout)
                 except KeyboardInterrupt:
                     raise
@@ -265,6 +293,8 @@ class NaiveAutoML:
                 except:
                     exception = traceback.format_exc()
                     status = "exception"
+                    if self.raise_errors:
+                        raise
                 if status != "ok":
                     scores = {scoring: np.nan for scoring in [self.scoring] + (self.side_scores if self.side_scores is not None else [])}
                 score = scores[get_scoring_name(self.scoring)]
@@ -474,10 +504,11 @@ class NaiveAutoML:
         self.logger.info(f"There are {len(categorical_features)} categorical features, which will be binarized.")
         self.logger.info(f"Missing values for the different attributes are {missing_values_per_feature}.")
         numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
+        do_sparse_encoding = self.sparse_training_data if self.sparse is None else self.sparse
         if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
             categorical_transformer = Pipeline([
                 ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
-                ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse=self.sparse)),
+                ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse=do_sparse_encoding)),
 
             ])
             self.mandatory_pre_processing = [("impute_and_binarize", ColumnTransformer(
