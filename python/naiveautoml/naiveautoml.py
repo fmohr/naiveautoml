@@ -19,7 +19,7 @@ class NaiveAutoML:
                  side_scores=None,
                  evaluation_fun=None,
                  num_cpus=8,
-                 execution_timeout=10,
+                 execution_timeout=300,
                  max_hpo_iterations=100,
                  max_hpo_iterations_without_imp=100,
                  max_hpo_time_without_imp=1800,
@@ -105,12 +105,13 @@ class NaiveAutoML:
         
     def register_search_space(self, X, y):
         
-
         task_type = self.get_task_type(X, y)
         self.logger.info(f"Automatically inferred task type: {task_type}")
         
         ''' search_space is a string or a list of dictionaries
-            - if it is a dict, the last one for the learner and all the others for pre-processing. Each dictionary has an entry "name" and an entry "components", which is a list of components with their parameters.
+            -   if it is a dict, the last one for the learner and all the others for pre-processing.
+                Each dictionary has an entry "name" and an entry "components",
+                which is a list of components with their parameters.
             - if it is a string, a json file with the name of search_space is read in with the same semantics
          '''
         json_str = pkg_resources.read_text('naiveautoml', 'searchspace-' + task_type + '.json')
@@ -157,7 +158,7 @@ class NaiveAutoML:
     
     def get_pipeline_for_decision_in_step(self, step_name, comp, X, y, decisions):
         
-        if self.strictly_naive: ## strictly naive case
+        if self.strictly_naive: # strictly naive case
             
             # build pipeline to be evaluated here
             if step_name == "learner":
@@ -166,7 +167,7 @@ class NaiveAutoML:
                 steps = [("learner", self.get_standard_learner_instance(X, y))]
             else:
                 steps = [(step_name, build_estimator(comp, None, X, y)), ("learner", self.get_standard_learner_instance(X, y))]
-            return Pipeline(steps = self.mandatory_pre_processing + steps)
+            return Pipeline(steps=self.mandatory_pre_processing + steps)
         
         else: # semi-naive case (consider previous decisions)
             steps_tmp = [(s[0], build_estimator(s[1], None, X, y)) for s in decisions]
@@ -176,7 +177,7 @@ class NaiveAutoML:
             for step_inner in self.search_space:
                 if is_component_defined_in_steps(steps_tmp, step_inner["name"]):
                     steps_ordered.append(get_step_with_name(steps_tmp, step_inner["name"]))
-            return Pipeline(steps = self.mandatory_pre_processing + steps_ordered)
+            return Pipeline(steps=self.mandatory_pre_processing + steps_ordered)
 
     def build_pipeline(self, hpo_processes, X, y):
         steps = self.get_instances_of_currently_selected_components_per_step(hpo_processes, X, y)
@@ -427,8 +428,7 @@ class NaiveAutoML:
         if self.show_progress:
             pbar.close()
 
-    def fit(self, X, y, categorical_features = None):
-
+    def reset(self, X, y, categorical_features=None):
         # register search space
         self.register_search_space(X, y)
 
@@ -444,13 +444,13 @@ class NaiveAutoML:
                 self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
             else:
                 self.scoring = "neg_mean_squared_error"
-        
+
         # show start message
         self.logger.info(f"""Optimizing pipeline for data with shape {X.shape}.
-        Timeout: {self.timeout}
-        Timeout per execution: {self.execution_timeout}
-        Scoring: {self.scoring}""")
-        
+                Timeout: {self.timeout}
+                Timeout per execution: {self.execution_timeout}
+                Scoring: {self.scoring}""")
+
         # determine categorical attributes and necessity of binarization
         self.sparse_training_data = isinstance(X, (scipy.sparse.csr.csr_matrix, scipy.sparse.lil.lil_matrix))
         if isinstance(X, pd.DataFrame):
@@ -459,15 +459,16 @@ class NaiveAutoML:
             else:
                 categorical_features = [c if not isinstance(c, int) else X.columns[c] for c in categorical_features]
             numeric_features = [c for c in X.columns if not c in categorical_features]
-                
+
         elif isinstance(X, np.ndarray) or self.sparse_training_data:
             if categorical_features is None:
                 types = [set([type(v) for v in r]) for r in X.T]
                 categorical_features = [c for c, t in enumerate(types) if len(t) != 1 or list(t)[0] == str]
             numeric_features = [c for c in range(X.shape[1]) if not c in categorical_features]
         else:
-            raise TypeError(f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
-        
+            raise TypeError(
+                f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
+
         # check necessity of imputation
         missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
         self.logger.info(f"There are {len(categorical_features)} categorical features, which will be binarized.")
@@ -476,7 +477,7 @@ class NaiveAutoML:
         if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
             categorical_transformer = Pipeline([
                 ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
-                ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse = self.sparse)),
+                ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse=self.sparse)),
 
             ])
             self.mandatory_pre_processing = [("impute_and_binarize", ColumnTransformer(
@@ -487,7 +488,7 @@ class NaiveAutoML:
             ))]
         else:
             self.mandatory_pre_processing = []
-        
+
         # print overview
         summary = ""
         for step in self.search_space:
@@ -495,6 +496,10 @@ class NaiveAutoML:
             for comp in step["components"]:
                 summary += "\n\t" + comp['class']
         self.logger.info(f"These are the components used by NaiveAutoML in the upcoming process (by steps):{summary}")
+
+    def fit(self, X, y, categorical_features=None):
+
+        self.reset(X, y, categorical_features)
         
         # choose algorithms
         self.choose_algorithms(X, y)
@@ -502,7 +507,7 @@ class NaiveAutoML:
         
         # tune parameters
         self.tune_parameters(X, y)
-                
+
         # train final pipeline
         self.logger.info("--------------------------------------------------")
         self.logger.info("Search Completed. Building final pipeline.")
@@ -518,7 +523,7 @@ class NaiveAutoML:
                 self.logger.warning("There was a problem in building the pipeline, cutting it one down!")
                 self.pl = Pipeline(steps=self.pl.steps[1:])
                 self.logger.warning("new pipeline is:", self.pl)
-            
+
         self.end_time = time.time()
         self.chosen_model = self.pl
 

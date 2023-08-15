@@ -16,6 +16,7 @@ import time
 import openml
 import pandas as pd
 
+
 def get_dataset(openmlid, as_numpy = True):
     ds = openml.datasets.get_dataset(openmlid)
     df = ds.get_data()[0]
@@ -191,7 +192,7 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # run naml
             start = time.time()
-            naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout=120, max_hpo_iterations=10, show_progress=True)
+            naml = naiveautoml.NaiveAutoML(logger_name="naml", execution_timeout=10, max_hpo_iterations=10, show_progress=True)
             naml.fit(X_train, y_train)
             end = time.time()
             runtime = end - start

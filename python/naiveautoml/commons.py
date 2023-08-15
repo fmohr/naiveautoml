@@ -21,10 +21,6 @@ from ConfigSpace.read_and_write import json as config_json
 import json
 import traceback
 
-
-import multiprocessing
-from functools import wraps
-
 import pynisher
 
 
@@ -67,7 +63,8 @@ class EvaluationPool:
                  side_scores=None,
                  tolerance_tuning=0.05,
                  tolerance_estimation_error=0.01,
-                 logger_name=None
+                 logger_name=None,
+                 use_caching=True
                  ):
         domains_task_type = ["classification", "regression"]
         if task_type not in domains_task_type:
@@ -95,6 +92,7 @@ class EvaluationPool:
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
         self.evaluation_fun = self.cross_validate if evaluation_fun is None else evaluation_fun
+        self.use_caching = use_caching
 
     def tellEvaluation(self, pl, scores, timestamp):
         spl = str(pl)
@@ -163,13 +161,13 @@ class EvaluationPool:
         
         start_outer = time.time()
         spl = str(pl)
-        if spl in self.cache:
+        if self.use_caching and spl in self.cache:
             out = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
             out[get_scoring_name(self.scoring)] = np.round(np.mean(self.cache[spl][1]), 4)
             return out
         timestamp = time.time()
         if timeout is not None:
-            with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
+            with pynisher.limit(self.evaluation_fun, wall_time=timeout, context="fork") as limited_evaluation:
                 scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
         else:
             scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
@@ -709,7 +707,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
     if clazz == sklearn.discriminant_analysis.LinearDiscriminantAnalysis:
         if params["shrinkage"] in (None, "none", "None"):
             shrinkage_ = None
-            solver = 'svd'
+            solver = 'lsqr'
         elif params["shrinkage"] == "auto":
             shrinkage_ = 'auto'
             solver = 'lsqr'
@@ -717,7 +715,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             shrinkage_ = float(params["shrinkage_factor"])
             solver = 'lsqr'
         else:
-            raise ValueError(self.shrinkage)
+            raise ValueError()
 
         tol = float(params["tol"])
         return sklearn.discriminant_analysis.LinearDiscriminantAnalysis(shrinkage=shrinkage_, tol=tol, solver=solver)
