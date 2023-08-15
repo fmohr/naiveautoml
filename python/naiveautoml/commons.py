@@ -2,7 +2,7 @@
 import pandas as pd
 import logging, warnings
 import itertools as it
-import os, psutil, gc
+import os, psutil
 import scipy.sparse
 import time
 
@@ -15,7 +15,6 @@ from sklearn.metrics import make_scorer
 
 
 # configspace
-import ConfigSpace
 from ConfigSpace.util import *
 from ConfigSpace.read_and_write import json as config_json
 import json
