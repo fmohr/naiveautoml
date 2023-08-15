@@ -333,6 +333,7 @@ class NaiveAutoML:
             if decision is None:
                 if step_name == "learner":
                     self.logger.error("No learner was chosen in the initial phase. This is typically caused by too low timeouts or bugs in a custom scoring function (if applicable).")
+                    break
                 self.logger.debug("No component chosen for this slot. Leaving it blank")
             else:
                 self.logger.debug(f"Added {decision['class']} as the decision for step {step_name}")
@@ -560,29 +561,35 @@ class NaiveAutoML:
         
         # choose algorithms
         self.choose_algorithms(X, y)
-        self.steps_after_which_algorithm_selection_was_completed = len(self.history)
-        
-        # tune parameters
-        self.tune_parameters(X, y)
+        if self.decisions:
+            self.steps_after_which_algorithm_selection_was_completed = len(self.history)
 
-        # train final pipeline
-        self.logger.info("--------------------------------------------------")
-        self.logger.info("Search Completed. Building final pipeline.")
-        self.logger.info("--------------------------------------------------")
-        self.pl = self.build_pipeline(self.hpo_processes, X, y)
-        self.logger.info(self.pl)
-        self.logger.info("Now fitting the pipeline with all given data.")
-        while True:
-            try:
-                self.pl.fit(X, y)
-                break
-            except:
-                self.logger.warning("There was a problem in building the pipeline, cutting it one down!")
-                self.pl = Pipeline(steps=self.pl.steps[1:])
-                self.logger.warning("new pipeline is:", self.pl)
+            # tune parameters
+            self.tune_parameters(X, y)
 
+            # train final pipeline
+            self.logger.info("--------------------------------------------------")
+            self.logger.info("Search Completed. Building final pipeline.")
+            self.logger.info("--------------------------------------------------")
+            self.pl = self.build_pipeline(self.hpo_processes, X, y)
+            self.logger.info(self.pl)
+            self.logger.info("Now fitting the pipeline with all given data.")
+            while len(self.pl.steps) > 0:
+                try:
+                    self.pl.fit(X, y)
+                    break
+                except:
+                    self.logger.warning("There was a problem in building the pipeline, cutting it one down!")
+                    self.pl = Pipeline(steps=self.pl.steps[1:])
+                    self.logger.warning("new pipeline is:", self.pl)
+
+            if len(self.pl.steps) > 0:
+                self.chosen_model = self.pl
+            else:
+                self.logger.warning("For some reason (should happen), the final pipeline was reduced to empty.")
+        else:
+            self.logger.info("No model was chosen in first phase, so there is nothing to return for me ...")
         self.end_time = time.time()
-        self.chosen_model = self.pl
 
         # compile history
         history_keys = ["time"]
