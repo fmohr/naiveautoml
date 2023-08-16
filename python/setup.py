@@ -2,13 +2,13 @@ from distutils.core import setup
 setup(
   name = 'naiveautoml',
   packages = ['naiveautoml'],
-  version = '0.0.22',
+  version = '0.0.24',
   license='MIT',
   description = 'The official package for the Naive AutoML paper',
   author = 'Felix Mohr',
   author_email = 'mail@felixmohr.de',
   url = 'https://github.com/fmohr/naiveautoml',
-  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.22.tar.gz',
+  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.24.tar.gz',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple'],
   install_requires=[
           'numpy',
