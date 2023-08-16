@@ -1,0 +1,8 @@
+numpy
+pandas
+scikit-learn
+configspace<0.7.1
+scipy
+pynisher
+psutil
+tqdm
