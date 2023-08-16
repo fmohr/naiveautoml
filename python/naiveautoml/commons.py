@@ -14,15 +14,21 @@ import time
 
 # sklearn
 import sklearn
+import sklearn.model_selection
+import sklearn.base
+import sklearn.feature_selection
 import sklearn.kernel_approximation
 import sklearn.preprocessing
 import sklearn.decomposition
 import sklearn.naive_bayes
 import sklearn.tree
 import sklearn.svm
+import sklearn.neural_network
 import sklearn.discriminant_analysis
 import sklearn.linear_model
 import sklearn.ensemble
+import sklearn.cluster
+import sklearn.gaussian_process
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import get_scorer
 from sklearn.metrics import make_scorer
