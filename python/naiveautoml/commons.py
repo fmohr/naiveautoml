@@ -14,6 +14,9 @@ import time
 
 # sklearn
 import sklearn
+import sklearn.kernel_approximation
+import sklearn.preprocessing
+import sklearn.decomposition
 import sklearn.naive_bayes
 import sklearn.tree
 import sklearn.svm
@@ -147,7 +150,7 @@ class EvaluationPool:
                         score = scorer(pl_copy, X_test, y_test)
                     except KeyboardInterrupt:
                         raise
-                    except:
+                    except Exception:
                         score = np.nan
                         if errors == "message":
                             self.logger.info(f"Observed exception in validation of pipeline {pl_copy}. Placing nan.")
@@ -252,7 +255,12 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         pooling_func = pooling_func_mapping[params["pooling_func"]]
         affinity = params["affinity"]
         linkage = params["linkage"]
-        return sklearn.cluster.FeatureAgglomeration(n_clusters=n_clusters, affinity=affinity, linkage=linkage, pooling_func=pooling_func)
+        return sklearn.cluster.FeatureAgglomeration(
+            n_clusters=n_clusters,
+            affinity=affinity,
+            linkage=linkage,
+            pooling_func=pooling_func
+        )
 
     if clazz == sklearn.feature_selection.SelectPercentile:
         percentile = int(float(params["percentile"]))
@@ -1174,7 +1182,7 @@ class HPOProcess:
             return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, None
         except KeyboardInterrupt:
             raise
-        except:
+        except Exception:
             return (
                 "exception",
                 {scoring: np.nan for scoring in [self.scoring] + self.side_scores},
@@ -1214,17 +1222,29 @@ The scores must be a dictionary as a function of the scoring functions. Observed
         else:
             self.configs_since_last_imp += 1
             self.time_since_last_imp += runtime
-            if self.its >= self.min_its and (self.time_since_last_imp > self.max_time_without_imp or self.configs_since_last_imp > self.max_its_without_imp):
-                self.logger.info("No improvement within " + str(self.time_since_last_imp) + "s or within " + str(self.max_its_without_imp) + " steps. Stopping HPO here.")
+            if self.its >= self.min_its and (
+                    self.time_since_last_imp > self.max_time_without_imp or
+                    self.configs_since_last_imp > self.max_its_without_imp
+            ):
+                self.logger.info(
+                    f"No improvement within {self.time_since_last_imp}s"
+                    f" or within {self.max_its_without_imp} steps."
+                    "Stopping HPO here."
+                )
                 self.active = False
                 return
 
         # check whether we do a quick exhaustive search and then disable this module
         if len(self.eval_runtimes) >= 10:
             total_expected_runtime = self.space_size * np.mean(self.eval_runtimes)
-            if self.allow_exhaustive_search and total_expected_runtime < np.inf and (remaining_time is None or total_expected_runtime < remaining_time):
+            if self.allow_exhaustive_search and total_expected_runtime < np.inf and (
+                    remaining_time is None or total_expected_runtime < remaining_time
+            ):
                 self.active = False
-                self.logger.info(f"Expected time to evaluate all configurations is only {total_expected_runtime}. Doing exhaustive search.")
+                self.logger.info(
+                    f"Expected time to evaluate all configurations is only {total_expected_runtime}."
+                    "Doing exhaustive search."
+                )
                 configs = get_all_configurations(self.config_space)
                 self.logger.info(f"Now evaluation all {len(configs)} possible configurations.")
                 for params in configs:
