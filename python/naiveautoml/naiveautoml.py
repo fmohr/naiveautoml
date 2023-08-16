@@ -561,10 +561,18 @@ class NaiveAutoML:
                 self.scoring = "neg_mean_squared_error"
 
         # show start message
-        self.logger.info(f"""Optimizing pipeline for data with shape {X.shape}.
-                Timeout: {self.timeout}
-                Timeout per execution: {self.execution_timeout}
-                Scoring: {self.scoring}""")
+        self.logger.info(f"""Optimizing pipeline under the following conditions.
+    Input type: {type(X)}
+    Input shape: {X.shape}
+    Target type: {type(y)}
+    Target shape: {y.shape}.
+    Timeout: {self.timeout}
+    Timeout per execution: {self.execution_timeout}
+    Scoring: {self.scoring}
+    Other scorings computed: {self.side_scores}
+    Max HPO iterations: {self.max_hpo_iterations}
+    Max HPO iterations w/o improvement: {self.max_hpo_iterations_without_imp}
+    Max HPO time (s) w/o improvement: {self.max_hpo_time_without_imp}""")
 
         self.mandatory_pre_processing = self.get_mandatory_preprocessing(X, y, categorical_features)
 
