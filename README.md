@@ -16,7 +16,7 @@ Missing values will be imputed per default with the median value of a column (fo
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.0.16.
+The current version is 0.0.26.
 
 We highly recommend to check out the [usage example python notebook](https://github.com/fmohr/naiveautoml/blob/master/python/usage-example.ipynb).
 
