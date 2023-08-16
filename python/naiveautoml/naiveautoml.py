@@ -8,6 +8,7 @@ from sklearn.compose import ColumnTransformer
 
 # naiveautoml commons
 from naiveautoml.commons import *
+import numpy as np
 import traceback
 
 
@@ -113,7 +114,25 @@ class NaiveAutoML:
         """
         # infer task type
         if self.task_type == "auto":
-            return "regression" if len(np.unique(y)) > 100 else "classification"
+            if type(self.scoring) == str:
+                return "regression" if self.scoring in [
+                    "explained_variance",
+                    "max_error",
+                    "neg_mean_absolute_error",
+                    "neg_mean_squared_error",
+                    "neg_root_mean_squared_error",
+                    "neg_mean_squared_log_error",
+                    "neg_median_absolute_error",
+                    "r2",
+                    "neg_mean_poisson_deviance",
+                    "neg_mean_gamma_deviance",
+                    "neg_mean_absolute_percentage_error",
+                    "d2_absolute_error_score",
+                    "d2_pinball_score",
+                    "d2_tweedie_score"
+                ] else "classification"
+            else:
+                return "regression" if len(np.unique(y)) > 100 else "classification"
         else:
             return self.task_type
 
@@ -291,7 +310,7 @@ class NaiveAutoML:
                 except KeyboardInterrupt:
                     raise
                 except pynisher.WallTimeoutException:
-                    self.logger.debug("TIMEOUT!")
+                    self.logger.info("TIMEOUT! No result observed for candidate.")
                     timeout = True
                     status = "timeout"
                 except:
@@ -299,10 +318,12 @@ class NaiveAutoML:
                     status = "exception"
                     if self.raise_errors:
                         raise
+                    else:
+                        self.logger.warning(f"Observed exception during the evaluation. The trace is as follows:\n{exception}")
                 if status != "ok":
                     scores = {scoring: np.nan for scoring in [self.scoring] + (self.side_scores if self.side_scores is not None else [])}
                 score = scores[get_scoring_name(self.scoring)]
-                self.logger.debug(f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}")
+                self.logger.info(f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}")
                 
                 # update history
                 self.history.append({
