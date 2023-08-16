@@ -1,5 +1,5 @@
 import random
-import scipy.sparse
+import scipy as sp
 from tqdm import tqdm
 import importlib.resources as pkg_resources
 
@@ -487,7 +487,7 @@ class NaiveAutoML:
     def get_mandatory_preprocessing(self, X, y, categorical_features):
 
         # determine categorical attributes and necessity of binarization
-        sparse_training_data = isinstance(X, (scipy.sparse.csr.csr_matrix, scipy.sparse.lil.lil_matrix))
+        sparse_training_data = sp.sparse.issparse(X)
         if isinstance(X, pd.DataFrame):
             if categorical_features is None:
                 categorical_features = list(X.select_dtypes(exclude=np.number).columns)
@@ -544,6 +544,7 @@ class NaiveAutoML:
             return []
 
     def reset(self, X, y, categorical_features=None):
+
         # register search space
         self.register_search_space(X, y)
 
@@ -562,9 +563,9 @@ class NaiveAutoML:
 
         # show start message
         self.logger.info(f"""Optimizing pipeline under the following conditions.
-    Input type: {type(X)}
+    Input type: {type(X)} (sparse: {sp.sparse.issparse(X)})
     Input shape: {X.shape}
-    Target type: {type(y)}
+    Target type: {type(y)} (sparse: {sp.sparse.issparse(y)})
     Target shape: {y.shape}.
     Timeout: {self.timeout}
     Timeout per execution: {self.execution_timeout}
@@ -585,6 +586,19 @@ class NaiveAutoML:
         self.logger.info(f"These are the components used by NaiveAutoML in the upcoming process (by steps):{summary}")
 
     def fit(self, X, y, categorical_features=None):
+
+        # if y is sparse, create a dense alternative
+        converted_y = False
+        if isinstance(y, scipy.sparse._csr.csr_matrix):
+            y = y.toarray()
+            converted_y = True
+        if isinstance(y, pd.Series) and pd.api.types.is_sparse(y):
+            y = np.array(y)
+            converted_y = True
+
+        if converted_y:
+            self.logger.info(f"Converted sparse target vector to numpy array. It has now shape {y.shape}.")
+
 
         self.reset(X, y, categorical_features)
         
