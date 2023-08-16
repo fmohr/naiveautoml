@@ -1,21 +1,32 @@
 # core
+import resource
+
+import numpy as np
 import pandas as pd
-import logging, warnings
+import logging
+import warnings
 import itertools as it
-import os, psutil
+import sys
+import os
+import psutil
 import scipy.sparse
 import time
 
 # sklearn
 import sklearn
-from sklearn import *
+import sklearn.naive_bayes
+import sklearn.tree
+import sklearn.svm
+import sklearn.discriminant_analysis
+import sklearn.linear_model
+import sklearn.ensemble
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import get_scorer
 from sklearn.metrics import make_scorer
 
 
 # configspace
-from ConfigSpace.util import *
+import ConfigSpace.hyperparameters
 from ConfigSpace.read_and_write import json as config_json
 import json
 import traceback
@@ -26,9 +37,9 @@ import pynisher
 def get_class(kls):
     parts = kls.split('.')
     module = ".".join(parts[:-1])
-    m = __import__( module )
+    m = __import__(module)
     for comp in parts[1:]:
-        m = getattr(m, comp)            
+        m = getattr(m, comp)
     return m
 
 
@@ -71,7 +82,13 @@ class EvaluationPool:
         self.task_type = task_type
         self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
 
-        if not isinstance(X, (pd.DataFrame, np.ndarray, scipy.sparse.csr.csr_matrix, scipy.sparse.csc.csc_matrix, scipy.sparse.lil.lil_matrix)):
+        if not isinstance(X, (
+                pd.DataFrame,
+                np.ndarray,
+                scipy.sparse.csr.csr_matrix,
+                scipy.sparse.csc.csc_matrix,
+                scipy.sparse.lil.lil_matrix
+        )):
             raise TypeError(f"X must be a numpy array but is {type(X)}")
         if y is None:
             raise TypeError("Parameter y must not be None")
@@ -98,10 +115,10 @@ class EvaluationPool:
         self.cache[spl] = (spl, scores, timestamp)
         score = np.mean(scores)
         if score > self.bestScore:
-            self.bestScore = score        
+            self.bestScore = score
             self.best_spl = spl
-                        
-    def cross_validate(self, pl, X, y, scorings, errors="raise"): # just a wrapper to ease parallelism
+
+    def cross_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -114,7 +131,7 @@ class EvaluationPool:
                 splitter = sklearn.model_selection.KFold(n_splits=5, random_state=None, shuffle=True)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
-                
+
                 X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
                 y_train = y.iloc[train_index] if isinstance(y, pd.Series) else y[train_index]
                 X_test = X.iloc[test_index] if isinstance(X, pd.DataFrame) else X[test_index]
@@ -122,7 +139,7 @@ class EvaluationPool:
 
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
-                
+
                 # compute values for each metric
                 for scoring in scorings:
                     scorer = build_scorer(scoring)
@@ -131,13 +148,12 @@ class EvaluationPool:
                     except KeyboardInterrupt:
                         raise
                     except:
-                        if errors in ["message", "ignore"]:
-                            if errors == "message":
-                                self.logger.info(f"Observed exception in validation of pipeline {pl_copy}. Placing nan.")
-                            score = np.nan
+                        score = np.nan
+                        if errors == "message":
+                            self.logger.info(f"Observed exception in validation of pipeline {pl_copy}. Placing nan.")
                         else:
                             raise
-                        
+
                     scores[get_scoring_name(scoring)].append(score)
             return scores
         except KeyboardInterrupt:
@@ -156,8 +172,9 @@ class EvaluationPool:
             return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
 
         process = psutil.Process(os.getpid())
-        self.logger.info(f"Initializing evaluation of {pl} with current memory consumption {int(process.memory_info().rss / 1024 / 1024)} MB. Now awaiting results.")
-        
+        mem = int(process.memory_info().rss / 1024 / 1024)
+        self.logger.info(f"Initializing evaluation of {pl}. Current memory consumption {mem}MB. Now awaiting results.")
+
         start_outer = time.time()
         spl = str(pl)
         if self.use_caching and spl in self.cache:
@@ -174,17 +191,22 @@ class EvaluationPool:
             return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
         runtime = time.time() - start_outer
         if not isinstance(scores, dict):
-            raise TypeError(f"scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.\nProbably you inserted an evaluation_fun argument that does not return a proper dictionary.")
+            raise TypeError(f"""
+scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
+Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
+                            )
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
         return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
-    
+
+
 def fullname(o):
     module = o.__module__
     if module is None or module == str.__class__.__module__:
         return o.__name__  # Avoid reporting __builtin__
     else:
         return module + '.' + o.__name__
+
 
 def check_true(p: str) -> bool:
     if p in ("True", "true", 1, True):
@@ -211,20 +233,18 @@ def check_for_bool(p: str) -> bool:
         return True
     else:
         raise ValueError("%s is not a bool" % str(p))
-    
+
+
 def build_estimator(comp, params, X, y):
-    
     if params is None:
         if get_class(comp["class"]) == sklearn.svm.SVC:
             params = {"kernel": config_json.read(json.dumps(comp["params"])).get_hyperparameter("kernel").value}
         else:
             return get_class(comp["class"])()
-    
     return compile_pipeline_by_class_and_params(get_class(comp["class"]), params, X, y)
 
 
 def compile_pipeline_by_class_and_params(clazz, params, X, y):
-    
     if clazz == sklearn.cluster.FeatureAgglomeration:
         pooling_func_mapping = dict(mean=np.mean, median=np.median, max=np.max)
         n_clusters = int(params["n_clusters"])
@@ -233,9 +253,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         affinity = params["affinity"]
         linkage = params["linkage"]
         return sklearn.cluster.FeatureAgglomeration(n_clusters=n_clusters, affinity=affinity, linkage=linkage, pooling_func=pooling_func)
-    
-    
-    
+
     if clazz == sklearn.feature_selection.SelectPercentile:
         percentile = int(float(params["percentile"]))
         score_func = params["score_func"]
@@ -248,15 +266,15 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         else:
             raise ValueError("score_func must be in ('chi2, 'f_classif', 'mutual_info'), ""but is: %s" % score_func)
         return sklearn.feature_selection.SelectPercentile(score_func=score_func, percentile=percentile)
-    
+
     if clazz == sklearn.preprocessing.RobustScaler:
         return sklearn.preprocessing.RobustScaler(quantile_range=(params["q_min"], params["q_max"]), copy=False,)
-    
+
     if clazz == sklearn.decomposition.PCA:
         n_components = float(params["keep_variance"])
         whiten = check_for_bool(params["whiten"])
         return sklearn.decomposition.PCA(n_components=n_components, whiten=whiten, copy=True)
-    
+
     if clazz == sklearn.feature_selection.GenericUnivariateSelect:
         alpha = params["alpha"]
         mode = params["mode"] if "mode" in params else None
@@ -275,9 +293,6 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
                              "but is: %s " % (score_func))
         return sklearn.feature_selection.GenericUnivariateSelect(score_func=score_func, param=alpha, mode=mode)
 
-        
-        
-        
     if clazz == sklearn.tree.DecisionTreeClassifier:
         criterion = params["criterion"]
         max_features = float(params["max_features"])
@@ -308,7 +323,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_weight_fraction_leaf=min_weight_fraction_leaf,
             min_impurity_decrease=min_impurity_decrease,
             class_weight=None)
-    
+
     if clazz == sklearn.tree.DecisionTreeRegressor:
         criterion = params["criterion"]
         max_features = float(params["max_features"])
@@ -338,7 +353,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_weight_fraction_leaf=min_weight_fraction_leaf,
             min_impurity_decrease=min_impurity_decrease
         )
-    
+
     if clazz == sklearn.ensemble.AdaBoostRegressor:
         n_estimators = int(params["n_estimators"])
         learning_rate = float(params["learning_rate"])
@@ -350,13 +365,13 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             n_estimators=n_estimators,
             learning_rate=learning_rate,
         )
-    
+
     if clazz == sklearn.ensemble.ExtraTreesRegressor:
         n_estimators = 10**3
         if params["criterion"] not in ("mse", "friedman_mse", "mae"):
             raise ValueError(
                 "'criterion' is not in ('mse', 'friedman_mse', "
-                "'mae): %s" % self.criterion
+                "'mae): %s" % params["criterion"]
             )
 
         if check_none(params["max_depth"]):
@@ -390,17 +405,11 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             oob_score=False,
             n_jobs=1
         )
-    
+
     if clazz == sklearn.gaussian_process.GaussianProcessRegressor:
         alpha = float(params["alpha"])
-        thetaL = float(params["thetaL"])
-        thetaU = float(params["thetaU"])
 
-        #n_features = X.shape[1]
-        kernel = sklearn.gaussian_process.kernels.RBF(
-            #length_scale=[1.0] * n_features,
-            #length_scale_bounds=[(thetaL, thetaU)] * n_features,
-        )
+        kernel = sklearn.gaussian_process.kernels.RBF()
 
         # Instanciate a Gaussian Process model
         return sklearn.gaussian_process.GaussianProcessRegressor(
@@ -411,7 +420,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             copy_X_train=True,
             normalize_y=True,
         )
-    
+
     if clazz == sklearn.ensemble.HistGradientBoostingRegressor:
         learning_rate = float(params["learning_rate"])
         max_iter = 1000
@@ -431,7 +440,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             scoring = None
         else:
             scoring = params["scoring"]
-            
+
         if params["early_stop"] == "off":
             n_iter_no_change = 0
             validation_fraction_ = None
@@ -443,7 +452,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             validation_fraction_ = float(params["validation_fraction"])
         else:
             raise ValueError("early_stop should be either off, train or valid")
-            
+
         return sklearn.ensemble.HistGradientBoostingRegressor(
             loss=params["loss"],
             learning_rate=learning_rate,
@@ -460,8 +469,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             verbose=False,
             warm_start=False,
         )
-    
-    
+
     if clazz == sklearn.svm.LinearSVC:
         penalty = params["penalty"]
         loss = params["loss"]
@@ -471,14 +479,23 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         dual = check_for_bool(params["dual"])
         fit_intercept = check_for_bool(params["fit_intercept"])
         intercept_scaling = float(params["intercept_scaling"])
-            
-        return sklearn.svm.LinearSVC(penalty=penalty, loss=loss, dual=dual, tol=tol, C=C, fit_intercept=fit_intercept, intercept_scaling=intercept_scaling, multi_class=multi_class)
-    
+
+        return sklearn.svm.LinearSVC(
+            penalty=penalty,
+            loss=loss,
+            dual=dual,
+            tol=tol,
+            C=C,
+            fit_intercept=fit_intercept,
+            intercept_scaling=intercept_scaling,
+            multi_class=multi_class
+        )
+
     if clazz == sklearn.svm.SVC:
         kernel = params["kernel"]
         if len(params) == 1:
             return sklearn.svm.SVC(kernel=kernel, probability=True)
-        
+
         C = float(params["C"])
         if "degree" not in params or params["degree"] is None:
             degree = 3
@@ -495,8 +512,19 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         tol = float(params["tol"])
         max_iter = float(params["max_iter"])
         shrinking = check_for_bool(params["shrinking"])
-        
-        return sklearn.svm.SVC(C=C, kernel=kernel,degree=degree,gamma=gamma,coef0=coef0,shrinking=shrinking,tol=tol, max_iter=max_iter, decision_function_shape='ovr', probability=True)
+
+        return sklearn.svm.SVC(
+            C=C,
+            kernel=kernel,
+            degree=degree,
+            gamma=gamma,
+            coef0=coef0,
+            shrinking=shrinking,
+            tol=tol,
+            max_iter=max_iter,
+            decision_function_shape='ovr',
+            probability=True
+        )
 
     if clazz == sklearn.svm.LinearSVR:
         C = float(params["C"])
@@ -516,7 +544,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             fit_intercept=fit_intercept,
             intercept_scaling=intercept_scaling,
         )
-    
+
     if clazz == sklearn.svm.SVR:
         C = float(params["C"])
         epsilon = float(params["epsilon"])
@@ -524,12 +552,12 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         shrinking = check_for_bool(params["shrinking"])
         degree = int(params["degree"]) if "degree" in params else 3
         gamma = float(params["gamma"]) if "gamma" in params else 0.1
-        if not "coef0" in params or check_none(params["coef0"]):
+        if "coef0" not in params or check_none(params["coef0"]):
             coef0 = 0.0
         else:
             coef0 = float(params["coef0"])
         max_iter = int(params["max_iter"])
-        
+
         # Calculate the size of the kernel cache (in MB) for sklearn's LibSVM.
         # The cache size is calculated as 2/3 of the available memory
         # (which is calculated as the memory limit minus the used memory)
@@ -569,8 +597,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             coef0=coef0,
             cache_size=cache_size
         )
-    
-    
+
     if clazz == sklearn.neural_network.MLPRegressor:
         max_iter = 10**4
         hidden_layer_depth = int(params["hidden_layer_depth"])
@@ -594,7 +621,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             early_stopping_val = True
         else:
             raise ValueError(
-                "Set early stopping to unknown value %s" % self.early_stopping
+                "Set early stopping to unknown value %s" % params["early_stopping"]
             )
         # elif self.early_stopping == "off":
         #     self.validation_fraction = 0
@@ -614,7 +641,6 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         beta_2 = float(params["beta_2"])
         epsilon = float(params["epsilon"])
         beta_1 = float(params["beta_1"])
-        
 
         # initial fit of only increment trees
         return sklearn.neural_network.MLPRegressor(
@@ -641,7 +667,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             # learning_rate=self.learning_rate,
             # max_fun=self.max_fun
         )
-    
+
     if clazz == sklearn.ensemble.RandomForestRegressor:
         n_estimators = 10**3
         if check_none(params["max_depth"]):
@@ -676,7 +702,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_impurity_decrease=min_impurity_decrease,
             warm_start=False,
         )
-    
+
     if clazz == sklearn.linear_model.SGDRegressor:
         alpha = float(params["alpha"])
         l1_ratio = float(params["l1_ratio"]) if "l1_ratio" in params else 0.15
@@ -718,14 +744,12 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
 
         tol = float(params["tol"])
         return sklearn.discriminant_analysis.LinearDiscriminantAnalysis(shrinkage=shrinkage_, tol=tol, solver=solver)
-        
+
     if clazz == sklearn.neural_network.MLPClassifier:
-        _fully_fit = False
-        max_iter = 512 # hard coded in auto-sklearn
+        max_iter = 512  # hard coded in auto-sklearn
         hidden_layer_depth = int(params["hidden_layer_depth"])
         num_nodes_per_layer = int(params["num_nodes_per_layer"])
-        hidden_layer_sizes = tuple(params["num_nodes_per_layer"]
-                                        for i in range(params["hidden_layer_depth"]))
+        hidden_layer_sizes = tuple(params["num_nodes_per_layer"] for i in range(params["hidden_layer_depth"]))
         activation = str(params["activation"])
         alpha = float(params["alpha"])
         learning_rate_init = float(params["learning_rate_init"])
@@ -773,7 +797,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             beta_2=beta_1,
             epsilon=epsilon
         )
-    
+
     if clazz == sklearn.linear_model.SGDClassifier:
         max_iter = 1024
         loss = params["loss"]
@@ -788,30 +812,31 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         tol = float(params["tol"])
         learning_rate = params["learning_rate"]
 
-        return sklearn.linear_model.SGDClassifier(loss=loss,
-                                           penalty=penalty,
-                                           alpha=alpha,
-                                           fit_intercept=fit_intercept,
-                                           max_iter=max_iter,
-                                           tol=tol,
-                                           learning_rate=learning_rate,
-                                           l1_ratio=l1_ratio,
-                                           epsilon=epsilon,
-                                           eta0=eta0,
-                                           power_t=power_t,
-                                           shuffle=True,
-                                           average=average,
-                                           warm_start=True)
-    
-    
+        return sklearn.linear_model.SGDClassifier(
+            loss=loss,
+            penalty=penalty,
+            alpha=alpha,
+            fit_intercept=fit_intercept,
+            max_iter=max_iter,
+            tol=tol,
+            learning_rate=learning_rate,
+            l1_ratio=l1_ratio,
+            epsilon=epsilon,
+            eta0=eta0,
+            power_t=power_t,
+            shuffle=True,
+            average=average,
+            warm_start=True
+        )
+
     if clazz == sklearn.linear_model.PassiveAggressiveClassifier:
-        max_iter = 1024 # fixed in auto-sklearn
+        max_iter = 1024  # fixed in auto-sklearn
         average = check_for_bool(params["average"])
         fit_intercept = check_for_bool(params["fit_intercept"])
         tol = float(params["tol"])
         C = float(params["C"])
         loss = params["loss"]
-        
+
         return sklearn.linear_model.PassiveAggressiveClassifier(
             C=C,
             fit_intercept=fit_intercept,
@@ -822,11 +847,13 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             warm_start=True,
             average=average,
         )
-        
-        
+
     if clazz == sklearn.ensemble.RandomForestClassifier:
         criterion = params["criterion"]
-        n_estimators = int(params["n_estimators"]) if "n_estimators" in params and params["n_estimators"] is not None else 512
+        if "n_estimators" in params and params["n_estimators"] is not None:
+            n_estimators = int(params["n_estimators"])
+        else:
+            n_estimators = 512
         if check_none(params["max_depth"]):
             max_depth = None
         else:
@@ -863,7 +890,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             max_leaf_nodes=max_leaf_nodes,
             min_impurity_decrease=min_impurity_decrease,
             warm_start=True)
-    
+
     if clazz == sklearn.ensemble.GradientBoostingClassifier:
         learning_rate = float(params["learning_rate"])
         max_iter = int(params["max_iter"]) if "max_iter" in params else 512
@@ -920,14 +947,12 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             validation_fraction=validation_fraction_,
             warm_start=True
         )
-            
-            
-        
+
     if clazz == sklearn.ensemble.ExtraTreesClassifier:
         n_estimators = 512
         max_features = int(X.shape[1] ** float(params["max_features"]))
         if params["criterion"] not in ("gini", "entropy"):
-            raise ValueError("'criterion' is not in ('gini', 'entropy'): ""%s" % self.criterion)
+            raise ValueError("'criterion' is not in ('gini', 'entropy'): ""%s" % params["criterion"])
 
         if check_none(params["max_depth"]):
             max_depth = None
@@ -947,36 +972,37 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         oob_score = check_for_bool(params["oob_score"]) if "oob_score" in params else False
         bootstrap = check_for_bool(params["bootstrap"])
 
-        return sklearn.ensemble.ExtraTreesClassifier(n_estimators=n_estimators,
-             criterion=criterion,
-             max_depth=max_depth,
-             min_samples_split=min_samples_split,
-             min_samples_leaf=min_samples_leaf,
-             bootstrap=bootstrap,
-             max_features=max_features,
-             max_leaf_nodes=max_leaf_nodes,
-             min_weight_fraction_leaf=min_weight_fraction_leaf,
-             min_impurity_decrease=min_impurity_decrease,
-             oob_score=oob_score,
-             warm_start=True)
-        
+        return sklearn.ensemble.ExtraTreesClassifier(
+            n_estimators=n_estimators,
+            criterion=criterion,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            bootstrap=bootstrap,
+            max_features=max_features,
+            max_leaf_nodes=max_leaf_nodes,
+            min_weight_fraction_leaf=min_weight_fraction_leaf,
+            min_impurity_decrease=min_impurity_decrease,
+            oob_score=oob_score,
+            warm_start=True
+        )
+
     else:
         return clazz(**params)
 
-    
-    
-    
-    
-    
+
 def get_hyperparameter_space_size(config_space):
     hps = config_space.get_hyperparameters()
     if not hps:
         return 0
     size = 1
     for hp in hps:
-        if isinstance(hp, (ConfigSpace.hyperparameters.UnParametrizedHyperparameter, ConfigSpace.hyperparameters.Constant)):
+        if isinstance(hp, (
+                ConfigSpace.hyperparameters.UnParametrizedHyperparameter,
+                ConfigSpace.hyperparameters.Constant
+        )):
             continue
-            
+
         if isinstance(hp, ConfigSpace.hyperparameters.CategoricalHyperparameter):
             size *= len(list(hp.choices))
         elif isinstance(hp, ConfigSpace.hyperparameters.IntegerHyperparameter):
@@ -991,52 +1017,99 @@ def get_all_configurations(config_space):
     domains = []
     for hp in config_space.get_hyperparameters():
         names.append(hp.name)
-        if isinstance(hp, (ConfigSpace.hyperparameters.UnParametrizedHyperparameter, ConfigSpace.hyperparameters.Constant)):
+        if isinstance(hp, (
+                ConfigSpace.hyperparameters.UnParametrizedHyperparameter,
+                ConfigSpace.hyperparameters.Constant
+        )):
             domains.append([hp.value])
-            
+
         if isinstance(hp, ConfigSpace.hyperparameters.CategoricalHyperparameter):
             domains.append(list(hp.choices))
         elif isinstance(hp, ConfigSpace.hyperparameters.IntegerHyperparameter):
             domains.append(list(range(hp.lower, hp.upper + 1)))
         else:
             raise TypeError(f"Unsupported hyperparameter type {type(hp)}")
-    
+
     # compute product
     configs = []
     for combo in it.product(*domains):
         configs.append({name: combo[i] for i, name in enumerate(names)})
     return configs
 
+
 def is_pipeline_forbidden(pl):
     forbidden_combos = [
-        {"feature-pre-processor": sklearn.decomposition.FastICA, "classifier": sklearn.naive_bayes.MultinomialNB},
-        {"feature-pre-processor": sklearn.decomposition.PCA, "classifier": sklearn.naive_bayes.MultinomialNB},
-        {"feature-pre-processor": sklearn.decomposition.KernelPCA, "classifier": sklearn.naive_bayes.MultinomialNB},
-        {"feature-pre-processor": sklearn.kernel_approximation.RBFSampler, "classifier": sklearn.naive_bayes.MultinomialNB},
-        {"feature-pre-processor": sklearn.kernel_approximation.Nystroem, "classifier": sklearn.naive_bayes.MultinomialNB},
-        {"data-pre-processor": 
-sklearn.preprocessing.PowerTransformer, "classifier": sklearn.naive_bayes.MultinomialNB},
-        {"data-pre-processor": sklearn.preprocessing.StandardScaler, "classifier": sklearn.naive_bayes.MultinomialNB},
-        {"data-pre-processor": sklearn.preprocessing.RobustScaler, "classifier": sklearn.naive_bayes.MultinomialNB}
+        {
+            "feature-pre-processor": sklearn.decomposition.FastICA,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        },
+        {
+            "feature-pre-processor": sklearn.decomposition.PCA,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        },
+        {
+            "feature-pre-processor": sklearn.decomposition.KernelPCA,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        },
+        {
+            "feature-pre-processor": sklearn.kernel_approximation.RBFSampler,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        },
+        {
+            "feature-pre-processor": sklearn.kernel_approximation.Nystroem,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        },
+        {
+            "data-pre-processor":  sklearn.preprocessing.PowerTransformer,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        },
+        {
+            "data-pre-processor": sklearn.preprocessing.StandardScaler,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        },
+        {
+            "data-pre-processor": sklearn.preprocessing.RobustScaler,
+            "classifier": sklearn.naive_bayes.MultinomialNB
+        }
     ]
-    
+
     representation = {}
     for step_name, obj in pl.steps:
         representation[step_name] = obj.__class__
-    
+
     for combo in forbidden_combos:
         matches = True
         for key, val in combo.items():
-            if not key in representation or representation[key] != val:
+            if key not in representation or representation[key] != val:
                 matches = False
                 break
         if matches:
             return True
     return False
 
+
 class HPOProcess:
-    
-    def __init__(self, task_type, step_name, comp, X, y, scoring, side_scores, evaluation_fun, execution_timeout, mandatory_pre_processing, other_step_component_instances, index_in_steps, max_time_without_imp, max_its_without_imp, min_its = 10, logger_name = None, allow_exhaustive_search = True):
+
+    def __init__(
+            self,
+            task_type,
+            step_name,
+            comp,
+            X,
+            y,
+            scoring,
+            side_scores,
+            evaluation_fun,
+            execution_timeout,
+            mandatory_pre_processing,
+            other_step_component_instances,
+            index_in_steps,
+            max_time_without_imp,
+            max_its_without_imp,
+            min_its=10,
+            logger_name=None,
+            allow_exhaustive_search=True
+    ):
         self.task_type = task_type
         self.step_name = step_name
         self.index_in_steps = index_in_steps
@@ -1060,10 +1133,17 @@ class HPOProcess:
         self.max_its_without_imp = max_its_without_imp
         self.min_its = min_its
         self.scoring = scoring
-        self.pool = EvaluationPool(task_type, X, y, scoring=scoring, side_scores = side_scores, evaluation_fun = evaluation_fun)
+        self.pool = EvaluationPool(
+            task_type,
+            X,
+            y,
+            scoring=scoring,
+            side_scores=side_scores,
+            evaluation_fun=evaluation_fun
+        )
         self.its = 0
         self.allow_exhaustive_search = allow_exhaustive_search
-        
+
         if side_scores is None:
             self.side_scores = []
         elif isinstance(side_scores, list):
@@ -1071,35 +1151,42 @@ class HPOProcess:
         else:
             self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
             self.side_scores = [side_scores]
-        
+
         # init logger
         self.logger = logging.getLogger('naiveautoml.hpo' if logger_name is None else logger_name)
         self.logger.info(f"Search space size for {comp['class']} is {self.space_size}")
-        
+
     def get_parametrized_pipeline(self, params):
         this_step = (self.step_name, build_estimator(self.comp, params, self.X, self.y))
         steps = [s for s in self.other_step_component_instances]
         steps[self.index_in_steps] = this_step
         return Pipeline(steps=self.mandatory_pre_processing + steps)
-        
+
     def evalComp(self, params):
         try:
-            return "ok", self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout), None
+            return (
+                "ok",
+                self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout),
+                None
+            )
         except pynisher.WallTimeoutException:
             self.logger.info("TIMEOUT")
             return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, None
         except KeyboardInterrupt:
             raise
         except:
-            return "exception", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, traceback.format_exc()
+            return (
+                "exception",
+                {scoring: np.nan for scoring in [self.scoring] + self.side_scores},
+                traceback.format_exc()
+            )
 
-        
-    def step(self, remaining_time = None):
+    def step(self, remaining_time=None):
         self.its += 1
-        
+
         if not self.active:
             raise Exception("Cannot step inactive HPO Process")
-        
+
         # draw random parameters
         params = {}
         sampled_config = self.config_space.sample_configuration(1)
@@ -1111,7 +1198,9 @@ class HPOProcess:
         time_start_eval = time.time()
         status, scores, exception = self.evalComp(params)
         if not isinstance(scores, dict):
-            raise TypeError(f"The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}")
+            raise TypeError(f"""
+The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}
+""")
         score = scores[get_scoring_name(self.scoring)]
         runtime = time.time() - time_start_eval
         self.eval_runtimes.append(runtime)
@@ -1129,7 +1218,7 @@ class HPOProcess:
                 self.logger.info("No improvement within " + str(self.time_since_last_imp) + "s or within " + str(self.max_its_without_imp) + " steps. Stopping HPO here.")
                 self.active = False
                 return
-            
+
         # check whether we do a quick exhaustive search and then disable this module
         if len(self.eval_runtimes) >= 10:
             total_expected_runtime = self.space_size * np.mean(self.eval_runtimes)
@@ -1148,6 +1237,6 @@ class HPOProcess:
                         self.best_params = params
                 self.logger.info("Configuration space completely exhausted.")
         return self.get_parametrized_pipeline(params), status, scores, runtime, exception
-    
+
     def get_best_config(self):
         return self.best_params

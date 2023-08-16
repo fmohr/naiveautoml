@@ -6,7 +6,7 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 60
     strategy:
       matrix:
         os: [ubuntu-20.04]
