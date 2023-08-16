@@ -166,7 +166,7 @@ class EvaluationPool:
             return out
         timestamp = time.time()
         if timeout is not None:
-            with pynisher.limit(self.evaluation_fun, wall_time=timeout, context="fork") as limited_evaluation:
+            with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
                 scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
         else:
             scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
