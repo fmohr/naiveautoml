@@ -1,8 +1,10 @@
+import collections
 import logging
 import random
 import scipy as sp
 import itertools as it
 import pandas as pd
+import scipy.sparse
 from tqdm import tqdm
 import importlib.resources as pkg_resources
 import time
@@ -17,7 +19,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
 
 # naiveautoml commons
-from naiveautoml.commons import\
+from .commons import\
     get_class, \
     build_scorer, \
     get_step_with_name, \
@@ -131,7 +133,7 @@ class NaiveAutoML:
         """
         # infer task type
         if self.task_type == "auto":
-            if self.scoring is str:
+            if isinstance(self.scoring, str):
                 return "regression" if self.scoring in [
                     "explained_variance",
                     "max_error",
@@ -148,6 +150,8 @@ class NaiveAutoML:
                     "d2_pinball_score",
                     "d2_tweedie_score"
                 ] else "classification"
+            elif isinstance(y, scipy.sparse.spmatrix):
+                return "regression" if np.issubdtype(y.dtype, np.number) else "classification"
             else:
                 return "regression" if len(np.unique(y)) > 100 else "classification"
         else:
@@ -544,7 +548,10 @@ class NaiveAutoML:
                 f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
 
         # check necessity of imputation
-        missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
+        if isinstance(X, scipy.sparse.spmatrix):
+            missing_values_per_feature = X.shape[0] - X.getnnz(axis=0)
+        else:
+            missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
         self.logger.info(f"There are {len(categorical_features)} categorical features, which will be binarized.")
         self.logger.info(f"Missing values for the different attributes are {missing_values_per_feature}.")
         numeric_transformer = Pipeline([("imputer", SimpleImputer(strategy="median"))])
@@ -582,6 +589,10 @@ class NaiveAutoML:
             numeric_features,
             sparse
     ):
+        if not isinstance(categorical_features, collections.abc.Iterable):
+            raise ValueError(f"categorical_features must be iterable but is {type(categorical_features)}")
+        if not isinstance(missing_values_per_feature, collections.abc.Iterable):
+            raise ValueError(f"missing_values_per_feature must be iterable but is {type(missing_values_per_feature)}")
         if not isinstance(sparse, bool):
             raise ValueError(f"`sparse` must be a bool but is {type(sparse)}")
         if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
@@ -610,8 +621,8 @@ class NaiveAutoML:
         self.history = []
         self.start_time = time.time()
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
+        task_type = self.get_task_type(X, y)
         if self.scoring is None:
-            task_type = self.get_task_type(X, y)
             if task_type == "classification":
                 self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
             else:
@@ -644,9 +655,21 @@ class NaiveAutoML:
     def fit(self, X, y, categorical_features=None):
 
         # if y is sparse, create a dense alternative
-        if sp.sparse.issparse(y):
-            y = np.array([v for v in y])
-            self.logger.info(f"Converted sparse target vector to numpy array. It has now shape {y.shape}.")
+        if self.get_task_type(X, y) == "regression":
+            if not isinstance(y, np.ndarray) or not np.issubdtype(y.dtype, np.number):
+                if isinstance(y, sp.sparse.spmatrix):
+                    y = y.toarray().astype(float).reshape(-1)
+                else:
+                    try:
+                        y = np.array([float(v) for v in y])
+                    except ValueError:
+                        raise Exception(
+                            "Identified a regression task, but the target object y cannot be cast to a numpy array."
+                        )
+                self.logger.info(
+                    "Detected a regression problem, and converted nun-numeric vector to numpy array. "
+                    f"It has now shape {y.shape}."
+                )
 
         self.reset(X, y, categorical_features)
 
