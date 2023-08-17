@@ -590,9 +590,9 @@ class NaiveAutoML:
             sparse
     ):
         if not isinstance(categorical_features, collections.abc.Iterable):
-            raise ValueError(f"categorical_features must be an iterable but is {type(categorical_features)}")
+            raise ValueError(f"categorical_features must be iterable but is {type(categorical_features)}")
         if not isinstance(missing_values_per_feature, collections.abc.Iterable):
-            raise ValueError(f"missing_values_per_feature must be an iterable but is {type(missing_values_per_feature)}")
+            raise ValueError(f"missing_values_per_feature must be iterable but is {type(missing_values_per_feature)}")
         if not isinstance(sparse, bool):
             raise ValueError(f"`sparse` must be a bool but is {type(sparse)}")
         if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
