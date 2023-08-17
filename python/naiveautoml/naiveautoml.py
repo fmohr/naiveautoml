@@ -17,7 +17,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
 
 # naiveautoml commons
-from naiveautoml.commons import\
+from .commons import\
     get_class, \
     build_scorer, \
     get_step_with_name, \
@@ -131,7 +131,7 @@ class NaiveAutoML:
         """
         # infer task type
         if self.task_type == "auto":
-            if self.scoring is str:
+            if isinstance(self.scoring, str):
                 return "regression" if self.scoring in [
                     "explained_variance",
                     "max_error",
@@ -610,8 +610,8 @@ class NaiveAutoML:
         self.history = []
         self.start_time = time.time()
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
+        task_type = self.get_task_type(X, y)
         if self.scoring is None:
-            task_type = self.get_task_type(X, y)
             if task_type == "classification":
                 self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
             else:
@@ -644,9 +644,21 @@ class NaiveAutoML:
     def fit(self, X, y, categorical_features=None):
 
         # if y is sparse, create a dense alternative
-        if sp.sparse.issparse(y):
-            y = np.array([v for v in y])
-            self.logger.info(f"Converted sparse target vector to numpy array. It has now shape {y.shape}.")
+        if self.get_task_type(X, y) == "regression":
+            if not isinstance(y, np.ndarray) or not np.issubdtype(y.dtype, np.number):
+                if isinstance(y, sp.sparse.spmatrix):
+                    y = y.toarray().astype(float)
+                else:
+                    try:
+                        y = np.array([float(v) for v in y])
+                    except ValueError:
+                        raise Exception(
+                            "Identified a regression task, but the target object y cannot be cast to a numpy array."
+                        )
+                self.logger.info(
+                    "Detected a regression problem, and converted nun-numeric vector to numpy array. "
+                    f"It has now shape {y.shape}."
+                )
 
         self.reset(X, y, categorical_features)
 
