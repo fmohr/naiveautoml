@@ -1,8 +1,10 @@
+import collections
 import logging
 import random
 import scipy as sp
 import itertools as it
 import pandas as pd
+import scipy.sparse
 from tqdm import tqdm
 import importlib.resources as pkg_resources
 import time
@@ -148,6 +150,8 @@ class NaiveAutoML:
                     "d2_pinball_score",
                     "d2_tweedie_score"
                 ] else "classification"
+            elif isinstance(y, scipy.sparse.spmatrix):
+                return "regression" if np.issubdtype(y.dtype, np.number) else "classification"
             else:
                 return "regression" if len(np.unique(y)) > 100 else "classification"
         else:
@@ -544,7 +548,10 @@ class NaiveAutoML:
                 f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
 
         # check necessity of imputation
-        missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
+        if isinstance(X, scipy.sparse.spmatrix):
+            missing_values_per_feature = X.shape[0] - X.getnnz(axis=0)
+        else:
+            missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
         self.logger.info(f"There are {len(categorical_features)} categorical features, which will be binarized.")
         self.logger.info(f"Missing values for the different attributes are {missing_values_per_feature}.")
         numeric_transformer = Pipeline([("imputer", SimpleImputer(strategy="median"))])
@@ -582,6 +589,10 @@ class NaiveAutoML:
             numeric_features,
             sparse
     ):
+        if not isinstance(categorical_features, collections.abc.Iterable):
+            raise ValueError(f"categorical_features must be an iterable but is {type(categorical_features)}")
+        if not isinstance(missing_values_per_feature, collections.abc.Iterable):
+            raise ValueError(f"missing_values_per_feature must be an iterable but is {type(missing_values_per_feature)}")
         if not isinstance(sparse, bool):
             raise ValueError(f"`sparse` must be a bool but is {type(sparse)}")
         if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
@@ -647,7 +658,7 @@ class NaiveAutoML:
         if self.get_task_type(X, y) == "regression":
             if not isinstance(y, np.ndarray) or not np.issubdtype(y.dtype, np.number):
                 if isinstance(y, sp.sparse.spmatrix):
-                    y = y.toarray().astype(float)
+                    y = y.toarray().astype(float).reshape(-1)
                 else:
                     try:
                         y = np.array([float(v) for v in y])

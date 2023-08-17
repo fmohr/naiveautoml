@@ -192,8 +192,11 @@ class EvaluationPool:
             return out
         timestamp = time.time()
         if timeout is not None:
-            with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
-                scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
+            if timeout > 1:
+                with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
+                    scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
+            else:  # no time left
+                scores = None
         else:
             scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
         if scores is None:
