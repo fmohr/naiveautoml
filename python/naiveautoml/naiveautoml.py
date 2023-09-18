@@ -1,13 +1,31 @@
+import collections
+import logging
 import random
+import scipy as sp
+import itertools as it
+import pandas as pd
 import scipy.sparse
 from tqdm import tqdm
 import importlib.resources as pkg_resources
+import time
+import pynisher
 
 # sklearn
+from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LinearRegression
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
 
 # naiveautoml commons
-from naiveautoml.commons import *
+from .commons import\
+    get_class, \
+    build_scorer, \
+    get_step_with_name, \
+    EvaluationPool, \
+    build_estimator, is_component_defined_in_steps, get_scoring_name, is_pipeline_forbidden, HPOProcess
+import json
 import numpy as np
 import traceback
 
@@ -25,8 +43,8 @@ class NaiveAutoML:
                  max_hpo_iterations_without_imp=100,
                  max_hpo_time_without_imp=1800,
                  timeout=None,
-                 standard_classifier=sklearn.neighbors.KNeighborsClassifier,
-                 standard_regressor=sklearn.linear_model.LinearRegression,
+                 standard_classifier=KNeighborsClassifier,
+                 standard_regressor=LinearRegression,
                  logger_name=None,
                  show_progress=False,
                  opt_ordering=None,
@@ -53,10 +71,10 @@ class NaiveAutoML:
         :param opt_ordering:
         :param strictly_naive:
         :param sparse: whether data is treated sparsely in pre-processing.
-                Default is `None`, and in that case, the sparsity is inferred automatically.
-                It is tested whether the mandatory pipeline can execute `fit_transform` without a numpy memory exception.
-                If so, no sparsity is applied.
-                Otherwise, it is assumed that not enough memory is available, and sparsity is enabled.
+        Default is `None`, and in that case, the sparsity is inferred automatically.
+        It is tested whether the mandatory pipeline can execute `fit_transform` without a numpy memory exception.
+        If so, no sparsity is applied.
+        Otherwise, it is assumed that not enough memory is available, and sparsity is enabled.
 
         :param task_type:
         :param raise_errors:
@@ -72,8 +90,8 @@ class NaiveAutoML:
         self.side_scores = side_scores
         for s in [scoring] + (side_scores if side_scores is not None else []):
             if s is not None:
-                build_scorer(s) # check whether this scorer can be built
-        
+                build_scorer(s)  # check whether this scorer can be built
+
         self.evaluation_fun = evaluation_fun
         self.num_cpus = num_cpus
         self.execution_timeout = execution_timeout
@@ -94,11 +112,12 @@ class NaiveAutoML:
         self.best_score_overall = None
         self.chosen_model = None
         self.chosen_attributes = None
-        
+        self.hpo_processes = None
+
         # mandatory pre-processing steps
         self.sparse = sparse
         self.mandatory_pre_processing = None
-        
+
         self.task_type = task_type
         self.opt_ordering = opt_ordering
 
@@ -114,7 +133,7 @@ class NaiveAutoML:
         """
         # infer task type
         if self.task_type == "auto":
-            if type(self.scoring) == str:
+            if isinstance(self.scoring, str):
                 return "regression" if self.scoring in [
                     "explained_variance",
                     "max_error",
@@ -131,6 +150,8 @@ class NaiveAutoML:
                     "d2_pinball_score",
                     "d2_tweedie_score"
                 ] else "classification"
+            elif isinstance(y, scipy.sparse.spmatrix):
+                return "regression" if np.issubdtype(y.dtype, np.number) else "classification"
             else:
                 return "regression" if len(np.unique(y)) > 100 else "classification"
         else:
@@ -150,12 +171,12 @@ class NaiveAutoML:
 
     def get_standard_learner_instance(self, X, y):
         return self.standard_classifier() if self.get_task_type(X, y) == "classification" else self.standard_regressor()
-        
+
     def register_search_space(self, X, y):
-        
+
         task_type = self.get_task_type(X, y)
         self.logger.info(f"Automatically inferred task type: {task_type}")
-        
+
         ''' search_space is a string or a list of dictionaries
             -   if it is a dict, the last one for the learner and all the others for pre-processing.
                 Each dictionary has an entry "name" and an entry "components",
@@ -164,7 +185,7 @@ class NaiveAutoML:
          '''
         json_str = pkg_resources.read_text('naiveautoml', 'searchspace-' + task_type + '.json')
         self.search_space = json.loads(json_str)
-        
+
     def get_shuffled_version_of_search_space(self):
         search_space = []
         for step in self.search_space:
@@ -172,9 +193,9 @@ class NaiveAutoML:
             random.shuffle(comps)
             search_space.append(step)
         return search_space
-        
+
     def check_combinations(self, X, y):
-        
+
         pool = self.get_evaluation_pool(X, y)
         algorithms_per_stage = []
         names = []
@@ -185,14 +206,14 @@ class NaiveAutoML:
                 cands.append(None)
             cands.extend([get_class(comp["class"]) for comp in step["components"]])
             algorithms_per_stage.append(cands)
-            
+
         for combo in it.product(*algorithms_per_stage):
-            pl = sklearn.pipeline.Pipeline(steps=[(names[i], clazz()) for i, clazz in enumerate(combo) if clazz is not None])
+            pl = Pipeline(steps=[(names[i], clazz()) for i, clazz in enumerate(combo) if clazz is not None])
             if is_pipeline_forbidden(pl):
                 self.logger.debug("SKIP FORBIDDEN")
             else:
                 pool.evaluate(pl, timeout=self.execution_timeout)
-                
+
     def get_instances_of_currently_selected_components_per_step(self, hpo_processes, X, y):
         steps = []
         for step in self.search_space:
@@ -203,21 +224,24 @@ class NaiveAutoML:
                 params = hpo.get_best_config()
                 steps.append((step_name, build_estimator(comp, params, X, y)))
         return steps
-    
+
     def get_pipeline_for_decision_in_step(self, step_name, comp, X, y, decisions):
-        
-        if self.strictly_naive: # strictly naive case
-            
+
+        if self.strictly_naive:  # strictly naive case
+
             # build pipeline to be evaluated here
             if step_name == "learner":
                 steps = [("learner", build_estimator(comp, None, X, y))]
             elif comp is None:
                 steps = [("learner", self.get_standard_learner_instance(X, y))]
             else:
-                steps = [(step_name, build_estimator(comp, None, X, y)), ("learner", self.get_standard_learner_instance(X, y))]
+                steps = [
+                    (step_name, build_estimator(comp, None, X, y)),
+                    ("learner", self.get_standard_learner_instance(X, y))
+                ]
             return Pipeline(steps=self.mandatory_pre_processing + steps)
-        
-        else: # semi-naive case (consider previous decisions)
+
+        else:  # semi-naive case (consider previous decisions)
             steps_tmp = [(s[0], build_estimator(s[1], None, X, y)) for s in decisions]
             if comp is not None:
                 steps_tmp.append((step_name, build_estimator(comp, None, X, y)))
@@ -249,9 +273,9 @@ class NaiveAutoML:
             else:
                 descriptor.extend([None, None])
         return descriptor
-    
+
     def choose_algorithms(self, X, y):
-        
+
         # run over all the elements of the pipeline
         self.logger.info("--------------------------------------------------")
         self.logger.info("Choosing Algorithm for each slot")
@@ -282,7 +306,7 @@ class NaiveAutoML:
                 components = [None] + step["components"]
             else:
                 components = step["components"]
-            
+
             # find best default parametrization for this slot (depending on choice of previously configured slots)
             pool = self.get_evaluation_pool(X, y)
             best_score = -np.inf
@@ -294,8 +318,11 @@ class NaiveAutoML:
                         self.logger.info("Timeout approaching. Not evaluating anymore for this stage.")
                         break
                     else:
-                        self.logger.info(f"Evaluating {comp['class'] if comp is not None else None}. Timeout: {self.execution_timeout}. Remaining time: {remaining_time}")
-                
+                        self.logger.info(
+                            f"Evaluating {comp['class'] if comp is not None else None}."
+                            f"Timeout: {self.execution_timeout}. Remaining time: {remaining_time}"
+                        )
+
                 # get and evaluate pipeline for this step
                 pl = self.get_pipeline_for_decision_in_step(step_name, comp, X, y, decisions)
                 exception = None
@@ -313,18 +340,27 @@ class NaiveAutoML:
                     self.logger.info("TIMEOUT! No result observed for candidate.")
                     timeout = True
                     status = "timeout"
-                except:
+                except Exception:
                     exception = traceback.format_exc()
                     status = "exception"
                     if self.raise_errors:
                         raise
                     else:
-                        self.logger.warning(f"Observed exception during the evaluation. The trace is as follows:\n{exception}")
+                        self.logger.warning(
+                            "Observed exception during the evaluation."
+                            f"The trace is as follows:\n{exception}"
+                        )
                 if status != "ok":
-                    scores = {scoring: np.nan for scoring in [self.scoring] + (self.side_scores if self.side_scores is not None else [])}
+                    scores = {
+                        scoring: np.nan for scoring in
+                        [self.scoring] +
+                        (self.side_scores if self.side_scores is not None else [])
+                    }
                 score = scores[get_scoring_name(self.scoring)]
-                self.logger.info(f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}")
-                
+                self.logger.info(
+                    f"Observed score of {score} for default configuration of {None if comp is None else comp['class']}"
+                )
+
                 # update history
                 self.history.append({
                     "time": time.time() - self.start_time,
@@ -335,7 +371,7 @@ class NaiveAutoML:
                     "status": status,
                     "exception": exception
                 })
-                
+
                 # update best score
                 if not np.isnan(score) and score > best_score:
                     self.logger.debug("This is a NEW BEST SCORE!")
@@ -345,57 +381,65 @@ class NaiveAutoML:
                     if score > self.best_score_overall:
                         self.best_score_overall = score
                         self.logger.debug(f"Updating new best internal pipeline to {pl}")
-                        self.pl = pl    
-                    
+                        self.pl = pl
+
                 # update progress bar
                 if self.show_progress:
                     pbar.update(1)
-                    
+
             if decision is None:
                 if step_name == "learner":
-                    self.logger.error("No learner was chosen in the initial phase. This is typically caused by too low timeouts or bugs in a custom scoring function (if applicable).")
+                    self.logger.error(
+                        "No learner was chosen in the initial phase."
+                        "This is typically caused by too low timeouts or bugs in a custom scoring function."
+                    )
                     break
                 self.logger.debug("No component chosen for this slot. Leaving it blank")
             else:
                 self.logger.debug(f"Added {decision['class']} as the decision for step {step_name}")
                 decisions.append((step_name, decision))
-        
+
         # ordering decisions by their order in the pipeline
         decisions_tmp = [d for d in decisions]
         decisions = []
         for step in self.search_space:
             if is_component_defined_in_steps(decisions_tmp, step["name"]):
                 decisions.append(get_step_with_name(decisions_tmp, step["name"]))
-        
+
         self.decisions = decisions
         self.components_with_score = components_with_score
-        self.logger.info("Algorithm Selection ready. Decisions: " + "".join(["\n\t" + str((d[0], d[1]["class"])) + " with performance " + str(components_with_score[d[0]]) for d in decisions]))
-        
+        self.logger.info(
+            "Algorithm Selection ready."
+            "Decisions: "
+            "".join([
+                "\n\t" + str((d[0], d[1]["class"])) + " with performance " + str(components_with_score[d[0]])
+                for d in decisions])
+        )
+
         # close progress bar
         if self.show_progress:
             pbar.close()
-    
+
     def tune_parameters(self, X, y):
-        
+
         # now conduct HPO until there is no local improvement or the deadline is hit
         self.logger.info("--------------------------------------------------")
         self.logger.info("Entering HPO phase")
         self.logger.info("--------------------------------------------------")
         task_type = self.get_task_type(X, y)
-        
+
         # read variables from state
         decisions = self.decisions
         components_with_score = self.components_with_score
-        
+
         # create HPO processes for each slot, taking into account the default parametrized component of each other slot
         self.hpo_processes = hpo_processes = {}
-        step_names = [d[0] for d in decisions]
         for step_name, comp in decisions:
             if step_name == "learner":
                 other_instances = [(step_name, None)]
             else:
                 other_instances = [(step_name, None), ("learner", self.get_standard_learner_instance(X, y))]
-            index = 0 # it is (rather by coincidence) the first step we want to optimize
+            index = 0  # it is (rather by coincidence) the first step we want to optimize
             hpo = HPOProcess(
                 task_type,
                 step_name,
@@ -414,18 +458,17 @@ class NaiveAutoML:
                 allow_exhaustive_search=(self.max_hpo_iterations is None),
                 logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
             )
-            hpo.best_score = components_with_score[step_name] # performance of default config
+            hpo.best_score = components_with_score[step_name]  # performance of default config
             hpo_processes[step_name] = hpo
-        
+
         # starting HPO process
         opt_round = 1
-        rs = np.random.RandomState()
         active_for_optimization = [name for name, hpo in hpo_processes.items() if hpo.active]
         round_runtimes = []
         if self.show_progress:
             print("Progress for parameter tuning:")
-            pbar = tqdm(total = self.max_hpo_iterations)
-            
+            pbar = tqdm(total=self.max_hpo_iterations)
+
         while active_for_optimization and (self.max_hpo_iterations is None or opt_round <= self.max_hpo_iterations):
             self.logger.info(f"Entering optimization round {opt_round}")
             if self.deadline is not None:
@@ -436,7 +479,7 @@ class NaiveAutoML:
                 self.logger.debug("Remaining time is: " + str(remaining_time) + "s.")
             else:
                 remaining_time = None
-            
+
             round_start = time.time()
             inactive = []
             for name in active_for_optimization:
@@ -466,7 +509,7 @@ class NaiveAutoML:
                 except Exception as e:
                     self.logger.error(f"An error occurred in the HPO step: {e}")
                     raise
-                    
+
             round_runtimes.append(time.time() - round_start)
             for name in inactive:
                 active_for_optimization.remove(name)
@@ -475,11 +518,11 @@ class NaiveAutoML:
             if str(newPl) != str(self.pl):
                 self.logger.info(f"Updating new best internal pipeline to {newPl}")
                 self.pl = newPl
-            
+
             # update progress bar
             if self.show_progress:
                 pbar.update(1)
-         
+
         # close progress bar for HPO
         if self.show_progress:
             pbar.close()
@@ -487,7 +530,7 @@ class NaiveAutoML:
     def get_mandatory_preprocessing(self, X, y, categorical_features):
 
         # determine categorical attributes and necessity of binarization
-        sparse_training_data = isinstance(X, (scipy.sparse.csr.csr_matrix, scipy.sparse.lil.lil_matrix))
+        sparse_training_data = sp.sparse.issparse(X)
         if isinstance(X, pd.DataFrame):
             if categorical_features is None:
                 categorical_features = list(X.select_dtypes(exclude=np.number).columns)
@@ -505,33 +548,57 @@ class NaiveAutoML:
                 f"Given data X is of type {type(X)} but must be pandas dataframe, numpy array or sparse scipy matrix.")
 
         # check necessity of imputation
-        missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
+        if isinstance(X, scipy.sparse.spmatrix):
+            missing_values_per_feature = X.shape[0] - X.getnnz(axis=0)
+        else:
+            missing_values_per_feature = np.sum(pd.isnull(X), axis=0)
         self.logger.info(f"There are {len(categorical_features)} categorical features, which will be binarized.")
         self.logger.info(f"Missing values for the different attributes are {missing_values_per_feature}.")
-        numeric_transformer = Pipeline([("imputer", sklearn.impute.SimpleImputer(strategy="median"))])
+        numeric_transformer = Pipeline([("imputer", SimpleImputer(strategy="median"))])
 
         # get preprocessing steps
         try_dense = self.sparse in [False, None]
-        steps = self.get_preprocessing_steps(categorical_features, missing_values_per_feature, numeric_transformer, numeric_features, not try_dense)
+        steps = self.get_preprocessing_steps(
+            categorical_features,
+            missing_values_per_feature,
+            numeric_transformer,
+            numeric_features,
+            not try_dense
+        )
         if not steps or self.sparse is not None:
             return steps
         try:
             Pipeline(steps).fit_transform(X, y)
             return steps
         except np.core._exceptions._ArrayMemoryError:
-            return self.get_preprocessing_steps(categorical_features, missing_values_per_feature, numeric_transformer,
-                                                 numeric_features, sparse=True)
-        except:
+            return self.get_preprocessing_steps(
+                categorical_features,
+                missing_values_per_feature,
+                numeric_transformer,
+                numeric_features,
+                sparse=True
+            )
+        except Exception:
             raise
 
     @staticmethod
-    def get_preprocessing_steps(categorical_features, missing_values_per_feature, numeric_transformer, numeric_features, sparse):
-        if type(sparse) != bool:
+    def get_preprocessing_steps(
+            categorical_features,
+            missing_values_per_feature,
+            numeric_transformer,
+            numeric_features,
+            sparse
+    ):
+        if not isinstance(categorical_features, collections.abc.Iterable):
+            raise ValueError(f"categorical_features must be iterable but is {type(categorical_features)}")
+        if not isinstance(missing_values_per_feature, collections.abc.Iterable):
+            raise ValueError(f"missing_values_per_feature must be iterable but is {type(missing_values_per_feature)}")
+        if not isinstance(sparse, bool):
             raise ValueError(f"`sparse` must be a bool but is {type(sparse)}")
         if len(categorical_features) > 0 or sum(missing_values_per_feature) > 0:
             categorical_transformer = Pipeline([
-                ("imputer", sklearn.impute.SimpleImputer(strategy="most_frequent")),
-                ("binarizer", sklearn.preprocessing.OneHotEncoder(handle_unknown='ignore', sparse_output=sparse)),
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("binarizer", OneHotEncoder(handle_unknown='ignore', sparse_output=sparse)),
 
             ])
             return [("impute_and_binarize", ColumnTransformer(
@@ -544,6 +611,7 @@ class NaiveAutoML:
             return []
 
     def reset(self, X, y, categorical_features=None):
+
         # register search space
         self.register_search_space(X, y)
 
@@ -553,8 +621,8 @@ class NaiveAutoML:
         self.history = []
         self.start_time = time.time()
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
+        task_type = self.get_task_type(X, y)
         if self.scoring is None:
-            task_type = self.get_task_type(X, y)
             if task_type == "classification":
                 self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
             else:
@@ -562,9 +630,9 @@ class NaiveAutoML:
 
         # show start message
         self.logger.info(f"""Optimizing pipeline under the following conditions.
-    Input type: {type(X)}
+    Input type: {type(X)} (sparse: {sp.sparse.issparse(X)})
     Input shape: {X.shape}
-    Target type: {type(y)}
+    Target type: {type(y)} (sparse: {sp.sparse.issparse(y)})
     Target shape: {y.shape}.
     Timeout: {self.timeout}
     Timeout per execution: {self.execution_timeout}
@@ -586,8 +654,25 @@ class NaiveAutoML:
 
     def fit(self, X, y, categorical_features=None):
 
+        # if y is sparse, create a dense alternative
+        if self.get_task_type(X, y) == "regression":
+            if not isinstance(y, np.ndarray) or not np.issubdtype(y.dtype, np.number):
+                if isinstance(y, sp.sparse.spmatrix):
+                    y = y.toarray().astype(float).reshape(-1)
+                else:
+                    try:
+                        y = np.array([float(v) for v in y])
+                    except ValueError:
+                        raise Exception(
+                            "Identified a regression task, but the target object y cannot be cast to a numpy array."
+                        )
+                self.logger.info(
+                    "Detected a regression problem, and converted nun-numeric vector to numpy array. "
+                    f"It has now shape {y.shape}."
+                )
+
         self.reset(X, y, categorical_features)
-        
+
         # choose algorithms
         self.choose_algorithms(X, y)
         if self.decisions:
@@ -607,7 +692,7 @@ class NaiveAutoML:
                 try:
                     self.pl.fit(X, y)
                     break
-                except:
+                except Exception:
                     self.logger.warning("There was a problem in building the pipeline, cutting it one down!")
                     self.pl = Pipeline(steps=self.pl.steps[1:])
                     self.logger.warning("new pipeline is:", self.pl)
@@ -625,7 +710,10 @@ class NaiveAutoML:
         for step in self.opt_ordering:
             history_keys.append(step + "_class")
             history_keys.append(step + "_hps")
-        history_keys.extend([self.scoring] + (self.side_scores if self.side_scores is not None else []) + ["new_best", "status", "exception"])
+        history_keys.extend(
+            [self.scoring] +
+            (self.side_scores if self.side_scores is not None else []) + ["new_best", "status", "exception"]
+        )
 
         history_rows = []
         for row in self.history:
@@ -637,7 +725,7 @@ class NaiveAutoML:
             history_rows.append(row_formatted)
         self.history = pd.DataFrame(history_rows, columns=history_keys)
         self.logger.info(f"Runtime was {self.end_time - self.start_time} seconds")
-        
+
     def eval_history(self, X, y):
         pool = self.get_evaluation_pool(X, y)
         scores = []
@@ -646,7 +734,8 @@ class NaiveAutoML:
         return scores
 
     def predict(self, X):
+        print(self.pl)
         return self.pl.predict(X)
-    
+
     def predict_proba(self, X):
         return self.pl.predict_proba(X)
