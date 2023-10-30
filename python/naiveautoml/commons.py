@@ -31,7 +31,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import get_scorer
 from sklearn.metrics import make_scorer
 
-
 # configspace
 import ConfigSpace.hyperparameters
 from ConfigSpace.read_and_write import json as config_json
@@ -39,9 +38,6 @@ import json
 import traceback
 
 import pynisher
-
-from .lccv_evaluator import Wrapper
-
 
 def get_class(kls):
     parts = kls.split('.')
@@ -80,6 +76,30 @@ def get_scoring_name(scoring):
 def build_scorer(scoring):
     return get_scorer(scoring) if isinstance(scoring, str) else make_scorer(
         **{key: val for key, val in scoring.items() if key != "name"})
+
+def get_evaluation_fun(instance, evaluation_fun):
+    from .evaluators import\
+        Lccv_validator, Kfold_3, Kfold_5, Mccv_1, Mccv_3, Mccv_5
+    if evaluation_fun is None or evaluation_fun == "lccv":
+        lccv_wrapper = Lccv_validator(instance)
+        return lccv_wrapper.lccv_validate
+    elif evaluation_fun == "kfold_5":
+        kfold_5_wrapper = Kfold_5(instance)
+        return kfold_5_wrapper.kfold_5_validate
+    elif evaluation_fun == "kfold_3":
+        kfold_3_wrapper = Kfold_3(instance)
+        return kfold_3_wrapper.kfold_3_validate
+    elif evaluation_fun == "mccv_1":
+        mccv_1_wrapper = Mccv_1(instance)
+        return mccv_1_wrapper.mccv_1_validate
+    elif evaluation_fun == "mccv_3":
+        mccv_3_wrapper = Mccv_3(instance)
+        return mccv_3_wrapper.mccv_3_validate
+    elif evaluation_fun == "mccv_5":
+        mccv_5_wrapper = Mccv_5(instance)
+        return mccv_5_wrapper.mccv_5_validate
+    else:
+        return evaluation_fun
 
 
 class EvaluationPool:
@@ -123,17 +143,11 @@ class EvaluationPool:
         else:
             self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
             self.side_scores = [side_scores]
+        self.evaluation_fun = get_evaluation_fun(self, evaluation_fun)
         self.bestScore = -np.inf
         self.tolerance_tuning = tolerance_tuning
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
-        if evaluation_fun is None or evaluation_fun == "lccv":
-            wrapper = Wrapper()
-            self.evaluation_fun = wrapper.lccv_validate
-        elif evaluation_fun == "cross_validation":
-            self.evaluation_fun = self.cross_validate
-        else:
-            self.evaluation_fun = evaluation_fun
         self.use_caching = use_caching
 
     def tellEvaluation(self, pl, scores, timestamp):

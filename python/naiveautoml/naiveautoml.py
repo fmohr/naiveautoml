@@ -25,6 +25,7 @@ from .commons import\
     get_step_with_name, \
     EvaluationPool, \
     build_estimator, is_component_defined_in_steps, get_scoring_name, is_pipeline_forbidden, HPOProcess
+
 import json
 import numpy as np
 import traceback
