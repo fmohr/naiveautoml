@@ -78,8 +78,10 @@ def build_scorer(scoring):
         **{key: val for key, val in scoring.items() if key != "name"})
 
 def get_evaluation_fun(instance, evaluation_fun):
+
     from .evaluators import\
         Lccv_validator, Kfold_3, Kfold_5, Mccv_1, Mccv_3, Mccv_5
+
     if evaluation_fun is None or evaluation_fun == "lccv":
         lccv_wrapper = Lccv_validator(instance)
         return lccv_wrapper.lccv_validate

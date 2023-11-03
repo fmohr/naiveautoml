@@ -14,7 +14,7 @@ class Lccv_validator:
         self.r = -np.inf
         self.instance = instance
 
-    def lccv_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
+    def lccv_validate(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -61,7 +61,7 @@ class Kfold_5:
     def __init__(self, instance):
         self.instance = instance
 
-    def kfold_5_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
+    def kfold_5_validate(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -83,7 +83,6 @@ class Kfold_5:
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
 
-                # compute values for each metric
                 for scoring in scorings:
                     scorer = build_scorer(scoring)
                     try:
@@ -113,7 +112,7 @@ class Kfold_3:
     def __init__(self, instance):
         self.instance = instance
 
-    def kfold_3_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
+    def kfold_3_validate(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -135,7 +134,6 @@ class Kfold_3:
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
 
-                # compute values for each metric
                 for scoring in scorings:
                     scorer = build_scorer(scoring)
                     try:
@@ -165,7 +163,7 @@ class Mccv_1:
     def __init__(self, instance):
         self.instance = instance
 
-    def mccv_1_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
+    def mccv_1_validate(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -173,9 +171,9 @@ class Mccv_1:
                 scorings = [scorings]
 
             if self.instance.task_type == "classification":
-                splitter = sklearn.model_selection.StratifiedShuffleSplit(n_splits=1, random_state=None)
+                splitter = sklearn.model_selection.StratifiedShuffleSplit(n_splits=1, train_size=0.8, random_state=None)
             elif self.instance.task_type:
-                splitter = sklearn.model_selection.ShuffleSplit(n_splits=1, random_state=None)
+                splitter = sklearn.model_selection.ShuffleSplit(n_splits=1, train_size=0.8, random_state=None)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
@@ -187,7 +185,6 @@ class Mccv_1:
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
 
-                # compute values for each metric
                 for scoring in scorings:
                     scorer = build_scorer(scoring)
                     try:
@@ -217,7 +214,7 @@ class Mccv_3:
     def __init__(self, instance):
         self.instance = instance
 
-    def mccv_3_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
+    def mccv_3_validate(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -225,9 +222,9 @@ class Mccv_3:
                 scorings = [scorings]
 
             if self.instance.task_type == "classification":
-                splitter = sklearn.model_selection.StratifiedShuffleSplit(n_splits=3, random_state=None)
+                splitter = sklearn.model_selection.StratifiedShuffleSplit(n_splits=3, train_size=0.8, random_state=None)
             elif self.instance.task_type:
-                splitter = sklearn.model_selection.ShuffleSplit(n_splits=3, random_state=None)
+                splitter = sklearn.model_selection.ShuffleSplit(n_splits=3, train_size=0.8, random_state=None)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
@@ -239,7 +236,6 @@ class Mccv_3:
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
 
-                # compute values for each metric
                 for scoring in scorings:
                     scorer = build_scorer(scoring)
                     try:
@@ -269,7 +265,7 @@ class Mccv_5:
     def __init__(self, instance):
         self.instance = instance
 
-    def mccv_5_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
+    def mccv_5_validate(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -277,9 +273,9 @@ class Mccv_5:
                 scorings = [scorings]
 
             if self.instance.task_type == "classification":
-                splitter = sklearn.model_selection.StratifiedShuffleSplit(n_splits=5, random_state=None)
+                splitter = sklearn.model_selection.StratifiedShuffleSplit(n_splits=5, train_size=0.8, random_state=None)
             elif self.instance.task_type:
-                splitter = sklearn.model_selection.ShuffleSplit(n_splits=5, random_state=None)
+                splitter = sklearn.model_selection.ShuffleSplit(n_splits=5, train_size=0.8, random_state=None)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
@@ -291,7 +287,6 @@ class Mccv_5:
                 pl_copy = sklearn.base.clone(pl)
                 pl_copy.fit(X_train, y_train)
 
-                # compute values for each metric
                 for scoring in scorings:
                     scorer = build_scorer(scoring)
                     try:

@@ -1,21 +1,25 @@
 from naiveautoml import NaiveAutoML
 from experiment_utils import get_dataset
 from py_experimenter.result_processor import ResultProcessor
+from sklearn.metrics import precision_score
+import time
 import sklearn
 
-def run_ex(parameters: dict, result_processor: ResultProcessor, custon_config: dict):
+def run_ex(parameters: dict, result_processor: ResultProcessor, custom_config: dict):
+    start_time = time.time()
     seed = parameters['seed']
     X, y = get_dataset(parameters['dataset_id'])
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=0.8, random_state=seed)
-    automl = NaiveAutoML()
+    automl = NaiveAutoML(evaluation_fun=parameters['eval_func'])
     automl.fit(X_train, y_train)
-    history = automl.history.iloc[-1]
-    result = {}
-    for column, value in history.items():
-        if column == 'status':
-            column = 'statusml'
-        result[column.replace('-', '_')] = value
-    if 'roc_auc' not in result:
-        result['roc_au c'] = None
-    result_processor.process_results({'learning_df': history})
+    y_predict = automl.predict(X_test)
+    score = precision_score(y_test, y_predict, average='micro')
+    end_time = time.time()
+    run_time = end_time - start_time
+    result_processor.process_results({'start_time': start_time})
+    result_processor.process_results({'end_time': end_time})
+    result_processor.process_results({'run_time': run_time})
+    result_processor.process_results({'pipeline': automl.chosen_model})
+    result_processor.process_results({'score': score})
+    result_processor.process_results({'history': automl.history})
  
