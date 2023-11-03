@@ -83,23 +83,17 @@ def get_evaluation_fun(instance, evaluation_fun):
         Lccv_validator, Kfold_3, Kfold_5, Mccv_1, Mccv_3, Mccv_5
 
     if evaluation_fun is None or evaluation_fun == "lccv":
-        lccv_wrapper = Lccv_validator(instance)
-        return lccv_wrapper.lccv_validate
+        return Lccv_validator(instance)
     elif evaluation_fun == "kfold_5":
-        kfold_5_wrapper = Kfold_5(instance)
-        return kfold_5_wrapper.kfold_5_validate
+        return Kfold_5(instance)
     elif evaluation_fun == "kfold_3":
-        kfold_3_wrapper = Kfold_3(instance)
-        return kfold_3_wrapper.kfold_3_validate
+        return Kfold_3(instance)
     elif evaluation_fun == "mccv_1":
-        mccv_1_wrapper = Mccv_1(instance)
-        return mccv_1_wrapper.mccv_1_validate
+        return Mccv_1(instance)
     elif evaluation_fun == "mccv_3":
-        mccv_3_wrapper = Mccv_3(instance)
-        return mccv_3_wrapper.mccv_3_validate
+        return Mccv_3(instance)
     elif evaluation_fun == "mccv_5":
-        mccv_5_wrapper = Mccv_5(instance)
-        return mccv_5_wrapper.mccv_5_validate
+        return Mccv_5(instance)
     else:
         return evaluation_fun
 
@@ -235,11 +229,24 @@ class EvaluationPool:
         if scores is None:
             return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
         runtime = time.time() - start_outer
+
+        # if scores is a 2-tuple, it is assumed that the evaluator object returned itself (in an altered version)
+        if type(scores) == tuple:
+            print("UNPACKING")
+            if not isinstance(scores[1], type(self.evaluation_fun)):
+                raise ValueError(
+                    "If an evaluation function returns an object in its second output,"
+                    "the type must coincide to the previous one!"
+                )
+            self.evaluation_fun = scores[1]
+            scores = scores[0]
+
         if not isinstance(scores, dict):
             raise TypeError(f"""
-scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
-Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
+            scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
+            Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
                             )
+
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
         return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}

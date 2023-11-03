@@ -14,7 +14,7 @@ class Lccv_validator:
         self.r = -np.inf
         self.instance = instance
 
-    def lccv_validate(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -22,6 +22,7 @@ class Lccv_validator:
                 scorings = [scorings]
 
             try:
+                print(f"Call LCCV with r={self.r}")
                 score, _, _, elcm = lccv(
                     pl,
                     X,
@@ -30,15 +31,18 @@ class Lccv_validator:
                     base_scoring=scorings[0],
                     additional_scorings=scorings[1:]
                 )
+                print("SCORE:", score)
                 if not np.isnan(score) and score > self.r:
+                    print("NEW BEST!")
                     self.r = score
+                    print(self.r)
 
                 results_at_highest_anchor = elcm.df[elcm.df["anchor"] == np.max(elcm.df["anchor"])].mean(
                     numeric_only=True)
                 results = {
                     s: results_at_highest_anchor[f"score_test_{s}"] if not np.isnan(score) else np.nan for s in scorings
                 }
-                return results
+                return results, self
             except KeyboardInterrupt:
                 raise
             except Exception:
@@ -61,7 +65,7 @@ class Kfold_5:
     def __init__(self, instance):
         self.instance = instance
 
-    def kfold_5_validate(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -112,7 +116,7 @@ class Kfold_3:
     def __init__(self, instance):
         self.instance = instance
 
-    def kfold_3_validate(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -163,7 +167,7 @@ class Mccv_1:
     def __init__(self, instance):
         self.instance = instance
 
-    def mccv_1_validate(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -214,7 +218,7 @@ class Mccv_3:
     def __init__(self, instance):
         self.instance = instance
 
-    def mccv_3_validate(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -265,7 +269,7 @@ class Mccv_5:
     def __init__(self, instance):
         self.instance = instance
 
-    def mccv_5_validate(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
