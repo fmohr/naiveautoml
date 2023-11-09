@@ -9,6 +9,7 @@ from tqdm import tqdm
 import importlib.resources as pkg_resources
 import time
 import pynisher
+from ConfigSpace.read_and_write import json as config_json
 
 # sklearn
 from sklearn.pipeline import Pipeline
@@ -113,7 +114,7 @@ class NaiveAutoML:
         self.best_score_overall = None
         self.chosen_model = None
         self.chosen_attributes = None
-        self.hpo_processes = None
+        self.hpo_process = None
 
         # mandatory pre-processing steps
         self.sparse = sparse
@@ -215,29 +216,27 @@ class NaiveAutoML:
             else:
                 pool.evaluate(pl, timeout=self.execution_timeout)
 
-    def get_instances_of_currently_selected_components_per_step(self, hpo_processes, X, y):
+    def get_instances_of_currently_selected_components_per_step(self, hpo_process, X, y):
         steps = []
-        for step in self.search_space:
-            step_name = step["name"]
-            if step_name in hpo_processes:
-                hpo = hpo_processes[step_name]
-                comp = hpo.comp
-                params = hpo.get_best_config()
-                steps.append((step_name, build_estimator(comp, params, X, y)))
+        for step_name, comp in hpo_process.comps_by_steps:
+            params = hpo_process.get_best_config(step_name)
+            steps.append((step_name, build_estimator(comp, params, X, y)))
         return steps
 
     def get_pipeline_for_decision_in_step(self, step_name, comp, X, y, decisions):
+
+        config = config_json.read(json.dumps(comp["params"])).get_default_configuration() if comp is not None else None
 
         if self.strictly_naive:  # strictly naive case
 
             # build pipeline to be evaluated here
             if step_name == "learner":
-                steps = [("learner", build_estimator(comp, None, X, y))]
+                steps = [("learner", build_estimator(comp, config, X, y))]
             elif comp is None:
                 steps = [("learner", self.get_standard_learner_instance(X, y))]
             else:
                 steps = [
-                    (step_name, build_estimator(comp, None, X, y)),
+                    (step_name, build_estimator(comp, config, X, y)),
                     ("learner", self.get_standard_learner_instance(X, y))
                 ]
             return Pipeline(steps=self.mandatory_pre_processing + steps)
@@ -245,15 +244,15 @@ class NaiveAutoML:
         else:  # semi-naive case (consider previous decisions)
             steps_tmp = [(s[0], build_estimator(s[1], None, X, y)) for s in decisions]
             if comp is not None:
-                steps_tmp.append((step_name, build_estimator(comp, None, X, y)))
+                steps_tmp.append((step_name, build_estimator(comp, config, X, y)))
             steps_ordered = []
             for step_inner in self.search_space:
                 if is_component_defined_in_steps(steps_tmp, step_inner["name"]):
                     steps_ordered.append(get_step_with_name(steps_tmp, step_inner["name"]))
             return Pipeline(steps=self.mandatory_pre_processing + steps_ordered)
 
-    def build_pipeline(self, hpo_processes, X, y):
-        steps = self.get_instances_of_currently_selected_components_per_step(hpo_processes, X, y)
+    def build_pipeline(self, hpo_process, X, y):
+        steps = self.get_instances_of_currently_selected_components_per_step(hpo_process, X, y)
         pl = Pipeline(self.mandatory_pre_processing + steps)
         self.logger.debug(f"Original final pipeline is: {pl}")
         i = 0
@@ -296,6 +295,7 @@ class NaiveAutoML:
                     opt_ordering.append(step["name"])
             self.opt_ordering = opt_ordering
 
+        best_score = -np.inf
         for step_index, step_name in enumerate(self.opt_ordering):
 
             # create list of components to try for this slot
@@ -303,16 +303,11 @@ class NaiveAutoML:
             self.logger.info("--------------------------------------------------")
             self.logger.info(f"Selecting component for step with name: {step_name}")
             self.logger.info("--------------------------------------------------")
-            if step_name not in ["learner"]:
-                components = [None] + step["components"]
-            else:
-                components = step["components"]
 
             # find best default parametrization for this slot (depending on choice of previously configured slots)
             pool = self.get_evaluation_pool(X, y)
-            best_score = -np.inf
             decision = None
-            for comp in components:
+            for comp in step["components"]:
                 if self.deadline is not None:
                     remaining_time = self.deadline - 10 - time.time()
                     if remaining_time is not None and remaining_time < 0:
@@ -411,7 +406,7 @@ class NaiveAutoML:
         self.components_with_score = components_with_score
         self.logger.info(
             "Algorithm Selection ready."
-            "Decisions: "
+            "Decisions: " +
             "".join([
                 "\n\t" + str((d[0], d[1]["class"])) + " with performance " + str(components_with_score[d[0]])
                 for d in decisions])
@@ -434,43 +429,35 @@ class NaiveAutoML:
         components_with_score = self.components_with_score
 
         # create HPO processes for each slot, taking into account the default parametrized component of each other slot
-        self.hpo_processes = hpo_processes = {}
-        for step_name, comp in decisions:
-            if step_name == "learner":
-                other_instances = [(step_name, None)]
-            else:
-                other_instances = [(step_name, None), ("learner", self.get_standard_learner_instance(X, y))]
-            index = 0  # it is (rather by coincidence) the first step we want to optimize
-            hpo = HPOProcess(
-                task_type,
-                step_name,
-                comp,
-                X,
-                y,
-                scoring=self.scoring,
-                side_scores=self.side_scores,
-                evaluation_fun=self.evaluation_fun,
-                execution_timeout=self.execution_timeout,
-                mandatory_pre_processing=self.mandatory_pre_processing,
-                other_step_component_instances=other_instances,
-                index_in_steps=index,
-                max_time_without_imp=self.max_hpo_time_without_imp,
-                max_its_without_imp=self.max_hpo_iterations_without_imp,
-                allow_exhaustive_search=(self.max_hpo_iterations is None),
-                logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
-            )
-            hpo.best_score = components_with_score[step_name]  # performance of default config
-            hpo_processes[step_name] = hpo
+        step_names = [decision[0] for decision in decisions]
+        self.hpo_process = HPOProcess(
+            task_type=task_type,
+            step_names=step_names,
+            comps_by_steps=decisions,
+            X=X,
+            y=y,
+            scoring=self.scoring,
+            side_scores=self.side_scores,
+            evaluation_fun=self.evaluation_fun,
+            execution_timeout=self.execution_timeout,
+            mandatory_pre_processing=self.mandatory_pre_processing,
+            #other_step_component_instances=other_instances,
+            #index_in_steps=index,
+            max_time_without_imp=self.max_hpo_time_without_imp,
+            max_its_without_imp=self.max_hpo_iterations_without_imp,
+            allow_exhaustive_search=(self.max_hpo_iterations is None),
+            logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
+        )
+        self.hpo_process.best_score = np.max(list(components_with_score.values()))  # best performance of default config
 
         # starting HPO process
         opt_round = 1
-        active_for_optimization = [name for name, hpo in hpo_processes.items() if hpo.active]
         round_runtimes = []
         if self.show_progress:
             print("Progress for parameter tuning:")
             pbar = tqdm(total=self.max_hpo_iterations)
 
-        while active_for_optimization and (self.max_hpo_iterations is None or opt_round <= self.max_hpo_iterations):
+        while self.hpo_process.active and (self.max_hpo_iterations is None or opt_round <= self.max_hpo_iterations):
             self.logger.info(f"Entering optimization round {opt_round}")
             if self.deadline is not None:
                 remaining_time = self.deadline - (np.mean(round_runtimes) if round_runtimes else 0) - 10 - time.time()
@@ -482,40 +469,32 @@ class NaiveAutoML:
                 remaining_time = None
 
             round_start = time.time()
-            inactive = []
-            for name in active_for_optimization:
-                hpo = hpo_processes[name]
-                self.logger.debug(f"Stepping HPO for {name}")
-                try:
-                    res = hpo.step(remaining_time)
-                    if res is not None:
-                        pl, status, scores, runtime, exception = res
-                        score = scores[get_scoring_name(self.scoring)]
-                        if score > self.best_score_overall:
-                            self.best_score_overall = score
-                        self.history.append({
-                            "time": time.time() - self.start_time,
-                            "pl": self.get_pipeline_descriptor(pl),
-                            "score_internal": score,
-                            "scores": scores,
-                            "new_best": score > self.best_score_overall,
-                            "status": status,
-                            "exception": exception}
-                        )
-                    if not hpo.active:
-                        self.logger.info(f"Deactivating {name}")
-                        inactive.append(name)
-                except KeyboardInterrupt:
-                    raise
-                except Exception as e:
-                    self.logger.error(f"An error occurred in the HPO step: {e}")
-                    raise
+            self.logger.debug(f"Stepping HPO")
+            try:
+                res = self.hpo_process.step(remaining_time)
+                if res is not None:
+                    pl, status, scores, runtime, exception = res
+                    score = scores[get_scoring_name(self.scoring)]
+                    if score > self.best_score_overall:
+                        self.best_score_overall = score
+                    self.history.append({
+                        "time": time.time() - self.start_time,
+                        "pl": self.get_pipeline_descriptor(pl),
+                        "score_internal": score,
+                        "scores": scores,
+                        "new_best": score > self.best_score_overall,
+                        "status": status,
+                        "exception": exception}
+                    )
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                self.logger.error(f"An error occurred in the HPO step: {e}")
+                raise
 
             round_runtimes.append(time.time() - round_start)
-            for name in inactive:
-                active_for_optimization.remove(name)
             opt_round += 1
-            newPl = self.build_pipeline(hpo_processes, X, y)
+            newPl = self.build_pipeline(self.hpo_process, X, y)
             if str(newPl) != str(self.pl):
                 self.logger.info(f"Updating new best internal pipeline to {newPl}")
                 self.pl = newPl
@@ -686,7 +665,7 @@ class NaiveAutoML:
             self.logger.info("--------------------------------------------------")
             self.logger.info("Search Completed. Building final pipeline.")
             self.logger.info("--------------------------------------------------")
-            self.pl = self.build_pipeline(self.hpo_processes, X, y)
+            self.pl = self.build_pipeline(self.hpo_process, X, y)
             self.logger.info(self.pl)
             self.logger.info("Now fitting the pipeline with all given data.")
             while len(self.pl.steps) > 0:
@@ -696,12 +675,12 @@ class NaiveAutoML:
                 except Exception:
                     self.logger.warning("There was a problem in building the pipeline, cutting it one down!")
                     self.pl = Pipeline(steps=self.pl.steps[1:])
-                    self.logger.warning("new pipeline is:", self.pl)
+                    self.logger.warning(f"new pipeline is: {self.pl}")
 
             if len(self.pl.steps) > 0:
                 self.chosen_model = self.pl
             else:
-                self.logger.warning("For some reason (should happen), the final pipeline was reduced to empty.")
+                self.logger.warning("For some reason (should never happen), the final pipeline was reduced to empty.")
         else:
             self.logger.info("No model was chosen in first phase, so there is nothing to return for me ...")
         self.end_time = time.time()

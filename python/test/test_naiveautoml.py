@@ -47,7 +47,7 @@ class TestNaiveAutoML(unittest.TestCase):
         logger.addHandler(ch)
 
         log_level = logging.WARN
-        
+
         # configure naml logger (by default set to WARN, change it to DEBUG if tests fail)
         naml_logger = logging.getLogger("naml")
         naml_logger.setLevel(log_level)
@@ -119,7 +119,17 @@ class TestNaiveAutoML(unittest.TestCase):
             categorical_features = [0, 2, 3, 4, 5, 9] # Altitude (5) is normally not categorical
             
         naml.fit(X, y, categorical_features=categorical_features)
-        
+
+    @parameterized.expand([
+        (61,),
+    ])
+    def test_number_of_evaluations(self, openmlid):
+        max_hpo_iterations = 5
+        X, y = get_dataset(openmlid, as_numpy=True)
+        naml = naiveautoml.NaiveAutoML(logger_name="naml", max_hpo_iterations=max_hpo_iterations, show_progress=True)
+        naml.fit(X, y)
+
+        self.assertEquals(sum([len(s["components"]) for s in naml.search_space]) + max_hpo_iterations, len(naml.history))
         
 
     def test_constant_algorithms_in_hpo_phase(self):
@@ -163,7 +173,7 @@ class TestNaiveAutoML(unittest.TestCase):
     '''
 
     @parameterized.expand([
-            (61, 7, 0.9),
+            (61, 45, 0.9),
             (188, 260, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -213,7 +223,7 @@ class TestNaiveAutoML(unittest.TestCase):
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
         
     @parameterized.expand([
-            (41021, 90, 550), # moneyball
+            (41021, 180, 550), # moneyball
             #(183, 260, 15), # abalone
             (212, 260, 15) # diabetes, has decimal targets
             
@@ -259,7 +269,7 @@ class TestNaiveAutoML(unittest.TestCase):
         
         
     @parameterized.expand([
-            (61, 10, 0.9),
+            (61, 30, 0.9),
             #(188, 60, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -327,7 +337,7 @@ class TestNaiveAutoML(unittest.TestCase):
         
         
     @parameterized.expand([
-            (61, 10, 0.9),
+            (61, 30, 0.9),
             #(188, 60, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),

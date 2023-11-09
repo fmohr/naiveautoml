@@ -15,7 +15,7 @@ class Lccv_validator:
         self.instance = instance
         self.train_size = train_size
 
-    def __call__(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, errors="message"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -30,7 +30,7 @@ class Lccv_validator:
                     r=self.r,
                     base_scoring=scorings[0],
                     additional_scorings=scorings[1:],
-                    target_anchor=0.8
+                    target_anchor=self.train_size
                 )
                 if not np.isnan(score) and score > self.r:
                     self.r = score
@@ -40,7 +40,7 @@ class Lccv_validator:
                 results = {
                     s: results_at_highest_anchor[f"score_test_{s}"] if not np.isnan(score) else np.nan for s in scorings
                 }
-                return results, self
+                return results, self  # return the object itself, so that it can be overwritten in the pool (necessary because of pynisher)
             except KeyboardInterrupt:
                 raise
             except Exception:
@@ -48,7 +48,9 @@ class Lccv_validator:
                     self.instance.logger.info(f"Observed exception in validation of pipeline {pl}.")
                 else:
                     raise
-            return results
+            return {
+                s: np.nan for s in scorings
+            }
         except KeyboardInterrupt:
             raise
         except Exception as e:
