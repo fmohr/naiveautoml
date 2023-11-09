@@ -29,7 +29,8 @@ class Lccv_validator:
                     y,
                     r=self.r,
                     base_scoring=scorings[0],
-                    additional_scorings=scorings[1:]
+                    additional_scorings=scorings[1:],
+                    target_anchor=0.8
                 )
                 print("SCORE:", score)
                 if not np.isnan(score) and score > self.r:
