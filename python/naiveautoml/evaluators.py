@@ -10,9 +10,10 @@ from .commons import\
 
 class Lccv_validator:
 
-    def __init__(self, instance):
+    def __init__(self, instance, train_size=0.8):
         self.r = -np.inf
         self.instance = instance
+        self.train_size = train_size
 
     def __call__(self, pl, X, y, scorings, errors="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -22,7 +23,6 @@ class Lccv_validator:
                 scorings = [scorings]
 
             try:
-                print(f"Call LCCV with r={self.r}")
                 score, _, _, elcm = lccv(
                     pl,
                     X,
@@ -31,11 +31,8 @@ class Lccv_validator:
                     base_scoring=scorings[0],
                     additional_scorings=scorings[1:]
                 )
-                print("SCORE:", score)
                 if not np.isnan(score) and score > self.r:
-                    print("NEW BEST!")
                     self.r = score
-                    print(self.r)
 
                 results_at_highest_anchor = elcm.df[elcm.df["anchor"] == np.max(elcm.df["anchor"])].mean(
                     numeric_only=True)
