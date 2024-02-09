@@ -80,14 +80,14 @@ def build_scorer(scoring):
 def get_evaluation_fun(instance, evaluation_fun):
 
     from .evaluators import\
-        Lccv_validator, Kfold_3, Kfold_5, Mccv_1, Mccv_3, Mccv_5
+        Lccv_validator, KFold, Mccv
 
     is_small_dataset = instance.X.shape[0] < 2000
 
     if evaluation_fun is None:
         if is_small_dataset:
             instance.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
-            return Mccv_5(instance)
+            return Mccv(instance, n_splits=5)
         else:
             instance.logger.info("Dataset is not small. Using LCCV-80 for evaluation")
             return Lccv_validator(instance, 0.8)
@@ -97,15 +97,15 @@ def get_evaluation_fun(instance, evaluation_fun):
     elif evaluation_fun == "lccv-90":
         return Lccv_validator(instance, 0.9)
     elif evaluation_fun == "kfold_5":
-        return Kfold_5(instance)
+        return KFold(instance, n_splits=5)
     elif evaluation_fun == "kfold_3":
-        return Kfold_3(instance)
+        return KFold(instance, n_splits=3)
     elif evaluation_fun == "mccv_1":
-        return Mccv_1(instance)
+        return Mccv(instance, n_splits=1)
     elif evaluation_fun == "mccv_3":
-        return Mccv_3(instance)
+        return Mccv(instance, n_splits=3)
     elif evaluation_fun == "mccv_5":
-        return Mccv_5(instance)
+        return Mccv(instance, n_splits=5)
     else:
         return evaluation_fun
 
