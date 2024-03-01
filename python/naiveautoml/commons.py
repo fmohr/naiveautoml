@@ -80,14 +80,14 @@ def build_scorer(scoring):
 def get_evaluation_fun(instance, evaluation_fun):
 
     from .evaluators import\
-        Lccv_validator, Kfold_3, Kfold_5, Mccv_1, Mccv_3, Mccv_5
+        Lccv_validator, KFold, Mccv
 
     is_small_dataset = instance.X.shape[0] < 2000
 
     if evaluation_fun is None:
         if is_small_dataset:
             instance.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
-            return Mccv_5(instance)
+            return Mccv(instance, n_splits=5)
         else:
             instance.logger.info("Dataset is not small. Using LCCV-80 for evaluation")
             return Lccv_validator(instance, 0.8)
@@ -97,15 +97,15 @@ def get_evaluation_fun(instance, evaluation_fun):
     elif evaluation_fun == "lccv-90":
         return Lccv_validator(instance, 0.9)
     elif evaluation_fun == "kfold_5":
-        return Kfold_5(instance)
+        return KFold(instance, n_splits=5)
     elif evaluation_fun == "kfold_3":
-        return Kfold_3(instance)
+        return KFold(instance, n_splits=3)
     elif evaluation_fun == "mccv_1":
-        return Mccv_1(instance)
+        return Mccv(instance, n_splits=1)
     elif evaluation_fun == "mccv_3":
-        return Mccv_3(instance)
+        return Mccv(instance, n_splits=3)
     elif evaluation_fun == "mccv_5":
-        return Mccv_5(instance)
+        return Mccv(instance, n_splits=5)
     else:
         return evaluation_fun
 
@@ -137,9 +137,9 @@ class EvaluationPool:
         if not isinstance(X, (
                 pd.DataFrame,
                 np.ndarray,
-                scipy.sparse.csr.csr_matrix,
-                scipy.sparse.csc.csc_matrix,
-                scipy.sparse.lil.lil_matrix
+                scipy.sparse.csr_matrix,
+                scipy.sparse.csc_matrix,
+                scipy.sparse.lil_matrix
         )):
             raise TypeError(f"X must be a numpy array but is {type(X)}")
         if y is None:
@@ -323,11 +323,11 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         n_clusters = int(params["n_clusters"])
         n_clusters = min(n_clusters, X.shape[1])
         pooling_func = pooling_func_mapping[params["pooling_func"]]
-        affinity = params["affinity"]
+        metric = params["metric"]
         linkage = params["linkage"]
         return sklearn.cluster.FeatureAgglomeration(
             n_clusters=n_clusters,
-            affinity=affinity,
+            metric=metric,
             linkage=linkage,
             pooling_func=pooling_func
         )
@@ -511,7 +511,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         base_estimator = sklearn.tree.DecisionTreeRegressor(max_depth=max_depth)
 
         return sklearn.ensemble.AdaBoostRegressor(
-            base_estimator=base_estimator,
+            estimator=base_estimator,
             n_estimators=n_estimators,
             learning_rate=learning_rate,
         )

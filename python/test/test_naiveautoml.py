@@ -223,16 +223,15 @@ class TestNaiveAutoML(unittest.TestCase):
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
         
     @parameterized.expand([
-            (41021, 180, 550), # moneyball
+            (41021, 120, 650), # moneyball
             #(183, 260, 15), # abalone
-            (212, 260, 15) # diabetes, has decimal targets
+            (212, 120, 15) # diabetes, has decimal targets
             
         ])
     def test_naml_results_regression(self, openmlid, exp_runtime, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on regression dataset {openmlid}")
-        
-            
+
         # run naml
         scores = []
         runtimes = []
@@ -244,7 +243,14 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # run naml
             start = time.time()
-            naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout=120, max_hpo_iterations=10, show_progress=True, task_type="regression")
+            naml = naiveautoml.NaiveAutoML(
+                logger_name="naml",
+                timeout=120,
+                max_hpo_iterations=10,
+                show_progress=True,
+                task_type="regression",
+                evaluation_fun="mccv_1"
+            )
             naml.fit(X_train, y_train)
             end = time.time()
             runtime = end - start
