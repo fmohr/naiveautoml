@@ -658,11 +658,12 @@
                             "name": "criterion",
                             "type": "categorical",
                             "choices": [
-                                "mse",
+                                "poisson",
                                 "friedman_mse",
-                                "mae"
+                                "absolute_error",
+                                "squared_error"
                             ],
-                            "default": "mse",
+                            "default": "squared_error",
                             "probabilities": null
                         },
                         {
@@ -734,11 +735,12 @@
                             "name": "criterion",
                             "type": "categorical",
                             "choices": [
-                                "mse",
+                                "poisson",
                                 "friedman_mse",
-                                "mae"
+                                "absolute_error",
+                                "squared_error"
                             ],
-                            "default": "mse",
+                            "default": "squared_error",
                             "probabilities": null
                         },
                         {
@@ -862,9 +864,12 @@
                             "name": "loss",
                             "type": "categorical",
                             "choices": [
-                                "least_squares"
+                                "absolute_error",
+                                "poisson",
+                                "quantile",
+                                "squared_error"
                             ],
-                            "default": "least_squares",
+                            "default": "squared_error",
                             "probabilities": null
                         },
                         {

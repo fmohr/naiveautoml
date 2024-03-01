@@ -467,6 +467,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             class_weight=None)
 
     if clazz == sklearn.linear_model.ARDRegression:
+        params = dict(params).copy()
+        params["fit_intercept"] = check_for_bool(params["fit_intercept"])
         return sklearn.linear_model.ARDRegression(**params)
 
     if clazz == sklearn.neighbors.KNeighborsRegressor:
@@ -516,10 +518,9 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
 
     if clazz == sklearn.ensemble.ExtraTreesRegressor:
         n_estimators = 10**3
-        if params["criterion"] not in ("mse", "friedman_mse", "mae"):
+        if params["criterion"] not in ("mse", "friedman_mse", "mae", "squared_error"):
             raise ValueError(
-                "'criterion' is not in ('mse', 'friedman_mse', "
-                "'mae): %s" % params["criterion"]
+                "'criterion' is not in ('mse', 'friedman_mse', 'mae', 'squared_error'): %s" % params["criterion"]
             )
 
         if check_none(params["max_depth"]):
