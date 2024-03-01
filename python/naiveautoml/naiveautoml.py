@@ -441,8 +441,8 @@ class NaiveAutoML:
             evaluation_fun=self.evaluation_fun,
             execution_timeout=self.execution_timeout,
             mandatory_pre_processing=self.mandatory_pre_processing,
-            #other_step_component_instances=other_instances,
-            #index_in_steps=index,
+            # other_step_component_instances=other_instances,
+            # index_in_steps=index,
             max_time_without_imp=self.max_hpo_time_without_imp,
             max_its_without_imp=self.max_hpo_iterations_without_imp,
             allow_exhaustive_search=(self.max_hpo_iterations is None),
@@ -469,7 +469,7 @@ class NaiveAutoML:
                 remaining_time = None
 
             round_start = time.time()
-            self.logger.debug(f"Stepping HPO")
+            self.logger.debug("Stepping HPO")
             try:
                 res = self.hpo_process.step(remaining_time)
                 if res is not None:

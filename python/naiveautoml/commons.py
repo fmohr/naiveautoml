@@ -3,7 +3,6 @@ import pandas as pd
 import logging
 import warnings
 import itertools as it
-import sys
 import os
 import psutil
 import scipy.sparse
@@ -46,14 +45,14 @@ def get_class(kls):
         m = __import__(module)
         for comp in parts[1:]:
             m = getattr(m, comp)
-    except:
+    except Exception:
         parts = kls.split('.')
         parts[2] = "_data"
         module = ".".join(parts[:-1])
         m = __import__(module)
         for comp in parts[1:]:
             m = getattr(m, comp)
-    
+
     return m
 
 
@@ -79,7 +78,7 @@ def build_scorer(scoring):
 def get_evaluation_fun(instance, evaluation_fun):
 
     from .evaluators import\
-        Lccv_validator, KFold, Mccv
+        LccvValidator, KFold, Mccv
 
     is_small_dataset = instance.X.shape[0] < 2000
 
@@ -89,12 +88,12 @@ def get_evaluation_fun(instance, evaluation_fun):
             return Mccv(instance, n_splits=5)
         else:
             instance.logger.info("Dataset is not small. Using LCCV-80 for evaluation")
-            return Lccv_validator(instance, 0.8)
+            return LccvValidator(instance, 0.8)
 
     elif evaluation_fun == "lccv-80":
-        return Lccv_validator(instance, 0.8)
+        return LccvValidator(instance, 0.8)
     elif evaluation_fun == "lccv-90":
-        return Lccv_validator(instance, 0.9)
+        return LccvValidator(instance, 0.9)
     elif evaluation_fun == "kfold_5":
         return KFold(instance, n_splits=5)
     elif evaluation_fun == "kfold_3":
@@ -240,9 +239,20 @@ class EvaluationPool:
             if timeout > 1:
                 with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
                     if hasattr(self.evaluation_fun, "errors"):
-                        scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores, errors="ignore")
+                        scores = limited_evaluation(
+                            pl,
+                            self.X,
+                            self.y,
+                            [self.scoring] + self.side_scores,
+                            errors="ignore"
+                        )
                     else:
-                        scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
+                        scores = limited_evaluation(
+                            pl,
+                            self.X,
+                            self.y,
+                            [self.scoring] + self.side_scores
+                        )
             else:  # no time left
                 scores = None
         else:
@@ -1116,9 +1126,6 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         )
 
     # allow instantiation without specific rule only for components without config space
-    #if len(params) == 0:
-     #   return clazz()
-
     raise ValueError(f"No rule defined for component {clazz}. But received params {params}")
 
 
@@ -1254,8 +1261,6 @@ class HPOProcess:
             evaluation_fun,
             execution_timeout,
             mandatory_pre_processing,
-            #other_step_component_instances,
-            #index_in_steps,
             max_time_without_imp,
             max_its_without_imp,
             min_its=10,
@@ -1264,12 +1269,10 @@ class HPOProcess:
     ):
         self.task_type = task_type
         self.step_names = step_names
-        #self.index_in_steps = index_in_steps
         self.comps_by_steps = comps_by_steps  # list of components, in order of appearance in pipeline
         self.X = X
         self.y = y
         self.mandatory_pre_processing = mandatory_pre_processing
-        #self.other_step_component_instances = other_step_component_instances
         self.execution_timeout = execution_timeout
 
         self.config_spaces = {}
