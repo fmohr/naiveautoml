@@ -262,7 +262,7 @@ class EvaluationPool:
         runtime = time.time() - start_outer
 
         # if scores is a 2-tuple, it is assumed that the evaluator object returned itself (in an altered version)
-        if type(scores) == tuple:
+        if isinstance(scores, tuple):
             if not isinstance(scores[1], type(self.evaluation_fun)):
                 raise ValueError(
                     "If an evaluation function returns an object in its second output,"
