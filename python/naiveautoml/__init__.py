@@ -1,3 +1,4 @@
-from naiveautoml.naiveautoml import NaiveAutoML
+from .naiveautoml import NaiveAutoML
 
-__version__ = "0.0.22"
+__all__ = ["NaiveAutoML"]
+__version__ = "0.0.27"
