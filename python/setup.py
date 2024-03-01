@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
   name = 'naiveautoml',
   packages = ['naiveautoml'],
-  version = '0.0.27',
+  version = '0.0.28',
   license='MIT',
   description = 'The official package for the Naive AutoML paper',
   author = 'Felix Mohr',

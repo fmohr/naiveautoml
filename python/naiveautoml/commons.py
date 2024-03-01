@@ -1,12 +1,8 @@
-# core
-import resource
-
 import numpy as np
 import pandas as pd
 import logging
 import warnings
 import itertools as it
-import sys
 import os
 import psutil
 import scipy.sparse
@@ -33,7 +29,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import get_scorer
 from sklearn.metrics import make_scorer
 
-
 # configspace
 import ConfigSpace.hyperparameters
 from ConfigSpace.read_and_write import json as config_json
@@ -46,9 +41,18 @@ import pynisher
 def get_class(kls):
     parts = kls.split('.')
     module = ".".join(parts[:-1])
-    m = __import__(module)
-    for comp in parts[1:]:
-        m = getattr(m, comp)
+    try:
+        m = __import__(module)
+        for comp in parts[1:]:
+            m = getattr(m, comp)
+    except Exception:
+        parts = kls.split('.')
+        parts[2] = "_data"
+        module = ".".join(parts[:-1])
+        m = __import__(module)
+        for comp in parts[1:]:
+            m = getattr(m, comp)
+
     return m
 
 
@@ -71,6 +75,39 @@ def build_scorer(scoring):
         **{key: val for key, val in scoring.items() if key != "name"})
 
 
+def get_evaluation_fun(instance, evaluation_fun):
+
+    from .evaluators import\
+        LccvValidator, KFold, Mccv
+
+    is_small_dataset = instance.X.shape[0] < 2000
+
+    if evaluation_fun is None:
+        if is_small_dataset:
+            instance.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
+            return Mccv(instance, n_splits=5)
+        else:
+            instance.logger.info("Dataset is not small. Using LCCV-80 for evaluation")
+            return LccvValidator(instance, 0.8)
+
+    elif evaluation_fun == "lccv-80":
+        return LccvValidator(instance, 0.8)
+    elif evaluation_fun == "lccv-90":
+        return LccvValidator(instance, 0.9)
+    elif evaluation_fun == "kfold_5":
+        return KFold(instance, n_splits=5)
+    elif evaluation_fun == "kfold_3":
+        return KFold(instance, n_splits=3)
+    elif evaluation_fun == "mccv_1":
+        return Mccv(instance, n_splits=1)
+    elif evaluation_fun == "mccv_3":
+        return Mccv(instance, n_splits=3)
+    elif evaluation_fun == "mccv_5":
+        return Mccv(instance, n_splits=5)
+    else:
+        return evaluation_fun
+
+
 class EvaluationPool:
 
     def __init__(self,
@@ -91,12 +128,16 @@ class EvaluationPool:
         self.task_type = task_type
         self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
 
+        # disable warnings by default
+        warnings.filterwarnings('ignore', module='sklearn')
+        warnings.filterwarnings('ignore', module='numpy')
+
         if not isinstance(X, (
                 pd.DataFrame,
                 np.ndarray,
-                scipy.sparse.csr.csr_matrix,
-                scipy.sparse.csc.csc_matrix,
-                scipy.sparse.lil.lil_matrix
+                scipy.sparse.csr_matrix,
+                scipy.sparse.csc_matrix,
+                scipy.sparse.lil_matrix
         )):
             raise TypeError(f"X must be a numpy array but is {type(X)}")
         if y is None:
@@ -112,11 +153,11 @@ class EvaluationPool:
         else:
             self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
             self.side_scores = [side_scores]
+        self.evaluation_fun = get_evaluation_fun(self, evaluation_fun)
         self.bestScore = -np.inf
         self.tolerance_tuning = tolerance_tuning
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
-        self.evaluation_fun = self.cross_validate if evaluation_fun is None else evaluation_fun
         self.use_caching = use_caching
 
     def tellEvaluation(self, pl, scores, timestamp):
@@ -128,8 +169,6 @@ class EvaluationPool:
             self.best_spl = spl
 
     def cross_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
-        warnings.filterwarnings('ignore', module='sklearn')
-        warnings.filterwarnings('ignore', module='numpy')
         try:
             if not isinstance(scorings, list):
                 scorings = [scorings]
@@ -176,6 +215,11 @@ class EvaluationPool:
                 raise
 
     def evaluate(self, pl, timeout=None):
+
+        # disable warnings by default
+        warnings.filterwarnings('ignore', module='sklearn')
+        warnings.filterwarnings('ignore', module='numpy')
+
         if is_pipeline_forbidden(pl):
             self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
             return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
@@ -194,7 +238,21 @@ class EvaluationPool:
         if timeout is not None:
             if timeout > 1:
                 with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
-                    scores = limited_evaluation(pl, self.X, self.y, [self.scoring] + self.side_scores)
+                    if hasattr(self.evaluation_fun, "errors"):
+                        scores = limited_evaluation(
+                            pl,
+                            self.X,
+                            self.y,
+                            [self.scoring] + self.side_scores,
+                            errors="ignore"
+                        )
+                    else:
+                        scores = limited_evaluation(
+                            pl,
+                            self.X,
+                            self.y,
+                            [self.scoring] + self.side_scores
+                        )
             else:  # no time left
                 scores = None
         else:
@@ -202,11 +260,23 @@ class EvaluationPool:
         if scores is None:
             return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
         runtime = time.time() - start_outer
+
+        # if scores is a 2-tuple, it is assumed that the evaluator object returned itself (in an altered version)
+        if isinstance(scores, tuple):
+            if not isinstance(scores[1], type(self.evaluation_fun)):
+                raise ValueError(
+                    "If an evaluation function returns an object in its second output,"
+                    "the type must coincide to the previous one!"
+                )
+            self.evaluation_fun = scores[1]
+            scores = scores[0]
+
         if not isinstance(scores, dict):
             raise TypeError(f"""
-scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
-Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
+            scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
+            Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
                             )
+
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
         return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
@@ -262,11 +332,11 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         n_clusters = int(params["n_clusters"])
         n_clusters = min(n_clusters, X.shape[1])
         pooling_func = pooling_func_mapping[params["pooling_func"]]
-        affinity = params["affinity"]
+        metric = params["metric"]
         linkage = params["linkage"]
         return sklearn.cluster.FeatureAgglomeration(
             n_clusters=n_clusters,
-            affinity=affinity,
+            metric=metric,
             linkage=linkage,
             pooling_func=pooling_func
         )
@@ -284,6 +354,12 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             raise ValueError("score_func must be in ('chi2, 'f_classif', 'mutual_info'), ""but is: %s" % score_func)
         return sklearn.feature_selection.SelectPercentile(score_func=score_func, percentile=percentile)
 
+    if clazz == sklearn.preprocessing.MinMaxScaler:
+        return sklearn.preprocessing.MinMaxScaler()
+
+    if clazz == sklearn.preprocessing.StandardScaler:
+        return sklearn.preprocessing.StandardScaler()
+
     if clazz == sklearn.preprocessing.RobustScaler:
         return sklearn.preprocessing.RobustScaler(quantile_range=(params["q_min"], params["q_max"]), copy=False,)
 
@@ -291,6 +367,48 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         n_components = float(params["keep_variance"])
         whiten = check_for_bool(params["whiten"])
         return sklearn.decomposition.PCA(n_components=n_components, whiten=whiten, copy=True)
+
+    if clazz == sklearn.decomposition.KernelPCA:
+        return sklearn.decomposition.KernelPCA(**params, copy_X=True)
+
+    if clazz == sklearn.decomposition.FastICA:
+        algorithm = params["algorithm"]
+        fun = params["fun"]
+        whiten = check_for_bool(params["whiten"])
+        n_components = int(params["n_components"]) if whiten else None
+        return sklearn.decomposition.FastICA(
+            n_components=n_components,
+            algorithm=algorithm,
+            fun=fun,
+            whiten=whiten)
+
+    if clazz == sklearn.preprocessing.PolynomialFeatures:
+        include_bias = check_for_bool(params["include_bias"])
+        interaction_only = check_for_bool(params["interaction_only"])
+        degree = int(params["degree"])
+        return sklearn.preprocessing.PolynomialFeatures(
+            degree=degree,
+            include_bias=include_bias,
+            interaction_only=interaction_only
+        )
+
+    if clazz == sklearn.preprocessing.QuantileTransformer:
+        return sklearn.preprocessing.QuantileTransformer(**params)
+
+    if clazz == sklearn.preprocessing.PowerTransformer:
+        return sklearn.preprocessing.PowerTransformer()
+
+    if clazz == sklearn.preprocessing.Normalizer:
+        return sklearn.preprocessing.Normalizer()
+
+    if clazz == sklearn.kernel_approximation.RBFSampler:
+        return sklearn.kernel_approximation.RBFSampler(**params)
+
+    if clazz == sklearn.kernel_approximation.Nystroem:
+        return sklearn.kernel_approximation.Nystroem(**params)
+
+    if clazz == sklearn.feature_selection.VarianceThreshold:
+        return sklearn.feature_selection.VarianceThreshold()
 
     if clazz == sklearn.feature_selection.GenericUnivariateSelect:
         alpha = params["alpha"]
@@ -309,6 +427,22 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
                              "for classification "
                              "but is: %s " % (score_func))
         return sklearn.feature_selection.GenericUnivariateSelect(score_func=score_func, param=alpha, mode=mode)
+
+    if clazz == sklearn.neighbors.KNeighborsClassifier:
+        return sklearn.neighbors.KNeighborsClassifier(**params)
+
+    if clazz == sklearn.naive_bayes.BernoulliNB:
+        alpha = float(params["alpha"])
+        fit_prior = check_for_bool(params["fit_prior"])
+        return sklearn.naive_bayes.BernoulliNB(alpha=alpha, fit_prior=fit_prior)
+
+    if clazz == sklearn.naive_bayes.GaussianNB:
+        return sklearn.naive_bayes.GaussianNB(**params)
+
+    if clazz == sklearn.naive_bayes.MultinomialNB:
+        alpha = float(params["alpha"])
+        fit_prior = check_for_bool(params["fit_prior"])
+        return sklearn.naive_bayes.MultinomialNB(alpha=alpha, fit_prior=fit_prior)
 
     if clazz == sklearn.tree.DecisionTreeClassifier:
         criterion = params["criterion"]
@@ -340,6 +474,14 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_weight_fraction_leaf=min_weight_fraction_leaf,
             min_impurity_decrease=min_impurity_decrease,
             class_weight=None)
+
+    if clazz == sklearn.linear_model.ARDRegression:
+        params = dict(params).copy()
+        params["fit_intercept"] = check_for_bool(params["fit_intercept"])
+        return sklearn.linear_model.ARDRegression(**params)
+
+    if clazz == sklearn.neighbors.KNeighborsRegressor:
+        return sklearn.neighbors.KNeighborsRegressor(**params)
 
     if clazz == sklearn.tree.DecisionTreeRegressor:
         criterion = params["criterion"]
@@ -378,17 +520,16 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         base_estimator = sklearn.tree.DecisionTreeRegressor(max_depth=max_depth)
 
         return sklearn.ensemble.AdaBoostRegressor(
-            base_estimator=base_estimator,
+            estimator=base_estimator,
             n_estimators=n_estimators,
             learning_rate=learning_rate,
         )
 
     if clazz == sklearn.ensemble.ExtraTreesRegressor:
         n_estimators = 10**3
-        if params["criterion"] not in ("mse", "friedman_mse", "mae"):
+        if params["criterion"] not in ("mse", "friedman_mse", "mae", "squared_error"):
             raise ValueError(
-                "'criterion' is not in ('mse', 'friedman_mse', "
-                "'mae): %s" % params["criterion"]
+                "'criterion' is not in ('mse', 'friedman_mse', 'mae', 'squared_error'): %s" % params["criterion"]
             )
 
         if check_none(params["max_depth"]):
@@ -428,7 +569,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
 
         kernel = sklearn.gaussian_process.kernels.RBF()
 
-        # Instanciate a Gaussian Process model
+        # Instantiate a Gaussian Process model
         return sklearn.gaussian_process.GaussianProcessRegressor(
             kernel=kernel,
             n_restarts_optimizer=10,
@@ -459,7 +600,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             scoring = params["scoring"]
 
         if params["early_stop"] == "off":
-            n_iter_no_change = 0
+            n_iter_no_change = 1
             validation_fraction_ = None
         elif params["early_stop"] == "train":
             n_iter_no_change = int(params["n_iter_no_change"])
@@ -527,7 +668,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         else:
             coef0 = float(params["coef0"])
         tol = float(params["tol"])
-        max_iter = float(params["max_iter"])
+        max_iter = int(params["max_iter"])
         shrinking = check_for_bool(params["shrinking"])
 
         return sklearn.svm.SVC(
@@ -578,30 +719,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         # Calculate the size of the kernel cache (in MB) for sklearn's LibSVM.
         # The cache size is calculated as 2/3 of the available memory
         # (which is calculated as the memory limit minus the used memory)
-        try:
-            # Retrieve memory limits imposed on the process
-            soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-
-            if soft > 0:
-                # Convert limit to units of megabytes
-                soft /= 1024 * 1024
-
-                # Retrieve memory used by this process
-                maxrss = resource.getrusage(resource.RUSAGE_SELF)[2] / 1024
-
-                # In MacOS, the MaxRSS output of resource.getrusage in bytes;
-                # on other platforms, it's in kilobytes
-                if sys.platform == "darwin":
-                    maxrss = maxrss / 1024
-
-                cache_size = (soft - maxrss) / 1.5
-
-                if cache_size < 0:
-                    cache_size = 200
-            else:
-                cache_size = 200
-        except Exception:
-            cache_size = 200
+        cache_size = 200
 
         return sklearn.svm.SVR(
             kernel=params["kernel"],
@@ -761,6 +879,9 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
 
         tol = float(params["tol"])
         return sklearn.discriminant_analysis.LinearDiscriminantAnalysis(shrinkage=shrinkage_, tol=tol, solver=solver)
+
+    if clazz == sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis:
+        return sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis(**params)
 
     if clazz == sklearn.neural_network.MLPClassifier:
         max_iter = 512  # hard coded in auto-sklearn
@@ -928,7 +1049,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         if check_none(params["scoring"]):
             scoring = None
         if params["early_stop"] == "off":
-            n_iter_no_change = 0
+            n_iter_no_change = 1
             validation_fraction_ = None
             early_stopping_ = False
         elif params["early_stop"] == "train":
@@ -1004,8 +1125,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             warm_start=True
         )
 
-    else:
-        return clazz(**params)
+    # allow instantiation without specific rule only for components without config space
+    raise ValueError(f"No rule defined for component {clazz}. But received params {params}")
 
 
 def get_hyperparameter_space_size(config_space):
@@ -1029,32 +1150,53 @@ def get_hyperparameter_space_size(config_space):
     return size
 
 
-def get_all_configurations(config_space):
-    names = []
-    domains = []
-    for hp in config_space.get_hyperparameters():
-        names.append(hp.name)
-        if isinstance(hp, (
-                ConfigSpace.hyperparameters.UnParametrizedHyperparameter,
-                ConfigSpace.hyperparameters.Constant
-        )):
-            domains.append([hp.value])
+def get_all_configurations(config_spaces):
+    configs_by_comps = {}
+    for step_name, config_space in config_spaces.items():
+        names = []
+        domains = []
+        for hp in config_space.get_hyperparameters():
+            names.append(hp.name)
+            if isinstance(hp, (
+                    ConfigSpace.hyperparameters.UnParametrizedHyperparameter,
+                    ConfigSpace.hyperparameters.Constant
+            )):
+                domains.append([hp.value])
 
-        if isinstance(hp, ConfigSpace.hyperparameters.CategoricalHyperparameter):
-            domains.append(list(hp.choices))
-        elif isinstance(hp, ConfigSpace.hyperparameters.IntegerHyperparameter):
-            domains.append(list(range(hp.lower, hp.upper + 1)))
-        else:
-            raise TypeError(f"Unsupported hyperparameter type {type(hp)}")
+            if isinstance(hp, ConfigSpace.hyperparameters.CategoricalHyperparameter):
+                domains.append(list(hp.choices))
+            elif isinstance(hp, ConfigSpace.hyperparameters.IntegerHyperparameter):
+                domains.append(list(range(hp.lower, hp.upper + 1)))
+            else:
+                raise TypeError(f"Unsupported hyperparameter type {type(hp)}")
 
-    # compute product
-    configs = []
-    for combo in it.product(*domains):
-        configs.append({name: combo[i] for i, name in enumerate(names)})
-    return configs
+        # compute product
+        configs = []
+        for combo in it.product(*domains):
+            configs.append({name: combo[i] for i, name in enumerate(names)})
+        configs_by_comps[step_name] = configs
+    return configs_by_comps
 
 
 def is_pipeline_forbidden(pl):
+    if pl["learner"] in [
+        sklearn.tree.DecisionTreeClassifier,
+        sklearn.tree.DecisionTreeRegressor,
+        sklearn.ensemble.ExtraTreesRegressor,
+        sklearn.ensemble.ExtraTreesClassifier,
+        sklearn.ensemble.HistGradientBoostingClassifier,
+        sklearn.ensemble.HistGradientBoostingRegressor,
+        sklearn.ensemble.GradientBoostingClassifier,
+        sklearn.ensemble.RandomForestClassifier,
+        sklearn.ensemble.RandomForestRegressor
+    ] and pl["data-pre-processor"] in [
+        sklearn.preprocessing.RobustScaler,
+        sklearn.preprocessing.StandardScaler,
+        sklearn.preprocessing.MinMaxScaler,
+        sklearn.preprocessing.QuantileTransformer
+    ]:
+        return False  # scaling has no effect onf tree-based classifiers
+
     forbidden_combos = [
         {
             "feature-pre-processor": sklearn.decomposition.FastICA,
@@ -1110,8 +1252,8 @@ class HPOProcess:
     def __init__(
             self,
             task_type,
-            step_name,
-            comp,
+            step_names,
+            comps_by_steps,
             X,
             y,
             scoring,
@@ -1119,8 +1261,6 @@ class HPOProcess:
             evaluation_fun,
             execution_timeout,
             mandatory_pre_processing,
-            other_step_component_instances,
-            index_in_steps,
             max_time_without_imp,
             max_its_without_imp,
             min_its=10,
@@ -1128,24 +1268,34 @@ class HPOProcess:
             allow_exhaustive_search=True
     ):
         self.task_type = task_type
-        self.step_name = step_name
-        self.index_in_steps = index_in_steps
-        self.comp = comp
+        self.step_names = step_names
+        self.comps_by_steps = comps_by_steps  # list of components, in order of appearance in pipeline
         self.X = X
         self.y = y
         self.mandatory_pre_processing = mandatory_pre_processing
-        self.other_step_component_instances = other_step_component_instances
         self.execution_timeout = execution_timeout
-        config_space_as_string = json.dumps(comp["params"])
-        self.config_space = config_json.read(config_space_as_string)
-        self.space_size = get_hyperparameter_space_size(self.config_space)
+
+        self.config_spaces = {}
+        self.best_configs = {}
+        self.space_size = 1
+        for step_name, comp in self.comps_by_steps:
+            config_space_as_string = json.dumps(comp["params"])
+            self.config_spaces[step_name] = config_json.read(config_space_as_string)
+            self.best_configs[step_name] = self.config_spaces[step_name].get_default_configuration()
+            space_size_for_component = get_hyperparameter_space_size(self.config_spaces[step_name])
+            if space_size_for_component > 0:
+                if self.space_size < np.inf:
+                    if space_size_for_component < np.inf:
+                        self.space_size *= space_size_for_component
+                    else:
+                        self.space_size = np.inf
+
         self.eval_runtimes = []
         self.configs_since_last_imp = 0
         self.time_since_last_imp = 0
         self.evaled_configs = set([])
         self.active = self.space_size >= 1
         self.best_score = -np.inf
-        self.best_params = None
         self.max_time_without_imp = max_time_without_imp
         self.max_its_without_imp = max_its_without_imp
         self.min_its = min_its
@@ -1171,19 +1321,21 @@ class HPOProcess:
 
         # init logger
         self.logger = logging.getLogger('naiveautoml.hpo' if logger_name is None else logger_name)
-        self.logger.info(f"Search space size for {comp['class']} is {self.space_size}")
+        self.logger.info(f"Search space size is {self.space_size}. Active? {self.active}")
 
-    def get_parametrized_pipeline(self, params):
-        this_step = (self.step_name, build_estimator(self.comp, params, self.X, self.y))
-        steps = [s for s in self.other_step_component_instances]
-        steps[self.index_in_steps] = this_step
+    def get_parametrized_pipeline(self, configs_by_comps):
+        steps = []
+        for step_name, comp in self.comps_by_steps:
+            params_of_comp = configs_by_comps[step_name]
+            this_step = (step_name, build_estimator(comp, params_of_comp, self.X, self.y))
+            steps.append(this_step)
         return Pipeline(steps=self.mandatory_pre_processing + steps)
 
-    def evalComp(self, params):
+    def evalComp(self, configs_by_comps):
         try:
             return (
                 "ok",
-                self.pool.evaluate(self.get_parametrized_pipeline(params), timeout=self.execution_timeout),
+                self.pool.evaluate(self.get_parametrized_pipeline(configs_by_comps), timeout=self.execution_timeout),
                 None
             )
         except pynisher.WallTimeoutException:
@@ -1204,16 +1356,23 @@ class HPOProcess:
         if not self.active:
             raise Exception("Cannot step inactive HPO Process")
 
+        self.logger.info(f"Starting {self.its}-th HPO step. Currently best known score is {self.best_score}")
+
         # draw random parameters
-        params = {}
-        sampled_config = self.config_space.sample_configuration(1)
-        for hp in self.config_space.get_hyperparameters():
-            if hp.name in sampled_config:
-                params[hp.name] = sampled_config[hp.name]
+        configs_by_comps = {}
+        for step_name, comp in self.comps_by_steps:
+            config_space = self.config_spaces[step_name]
+            sampled_config = config_space.sample_configuration(1)
+            params = {}
+            for hp in config_space.get_hyperparameters():
+                if hp.name in sampled_config:
+                    params[hp.name] = sampled_config[hp.name]
+            configs_by_comps[step_name] = params
+            del params
 
         # evaluate configured pipeline
         time_start_eval = time.time()
-        status, scores, exception = self.evalComp(params)
+        status, scores, exception = self.evalComp(configs_by_comps)
         if not isinstance(scores, dict):
             raise TypeError(f"""
 The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}
@@ -1221,13 +1380,13 @@ The scores must be a dictionary as a function of the scoring functions. Observed
         score = scores[get_scoring_name(self.scoring)]
         runtime = time.time() - time_start_eval
         self.eval_runtimes.append(runtime)
-        self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")
+        self.logger.info(f"Observed score of {score} for params {configs_by_comps}")
         if score > self.best_score:
             self.logger.info("This is a NEW BEST SCORE!")
             self.best_score = score
             self.time_since_last_imp = 0
             self.configs_since_last_imp = 0
-            self.best_params = params
+            self.best_configs = configs_by_comps.copy()
         else:
             self.configs_since_last_imp += 1
             self.time_since_last_imp += runtime
@@ -1254,18 +1413,18 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                     f"Expected time to evaluate all configurations is only {total_expected_runtime}."
                     "Doing exhaustive search."
                 )
-                configs = get_all_configurations(self.config_space)
+                configs = get_all_configurations(self.config_spaces)
                 self.logger.info(f"Now evaluation all {len(configs)} possible configurations.")
-                for params in configs:
-                    status, scores, exception = self.evalComp(params)
+                for configs_by_comps in configs:
+                    status, scores, exception = self.evalComp(configs_by_comps)
                     score = scores[self.scoring]
-                    self.logger.info(f"Observed score of {score} for {self.comp['class']} with params {params}")
+                    self.logger.info(f"Observed score of {score} for params {configs_by_comps}")
                     if score > self.best_score:
                         self.logger.info("This is a NEW BEST SCORE!")
                         self.best_score = score
-                        self.best_params = params
+                        self.best_configs = configs_by_comps
                 self.logger.info("Configuration space completely exhausted.")
-        return self.get_parametrized_pipeline(params), status, scores, runtime, exception
+        return self.get_parametrized_pipeline(configs_by_comps), status, scores, runtime, exception
 
-    def get_best_config(self):
-        return self.best_params
+    def get_best_config(self, step_name):
+        return self.best_configs[step_name]

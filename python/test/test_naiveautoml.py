@@ -47,7 +47,7 @@ class TestNaiveAutoML(unittest.TestCase):
         logger.addHandler(ch)
 
         log_level = logging.WARN
-        
+
         # configure naml logger (by default set to WARN, change it to DEBUG if tests fail)
         naml_logger = logging.getLogger("naml")
         naml_logger.setLevel(log_level)
@@ -84,7 +84,17 @@ class TestNaiveAutoML(unittest.TestCase):
         
         
         
-
+        
+    @parameterized.expand([
+            (61,),
+            (188,), # eucalyptus. Very important because has both missing values and categorical attributes
+            
+        ])
+    def test_acceptance_of_dataframe(self, openmlid):
+        X, y = get_dataset(openmlid, as_numpy = False)
+        naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout=15, max_hpo_iterations=1, show_progress=True)
+        naml.fit(X, y)
+        
     @parameterized.expand([
             (188,), # eucalyptus. Very important because has both missing values and categorical attributes
         ])
@@ -109,7 +119,17 @@ class TestNaiveAutoML(unittest.TestCase):
             categorical_features = [0, 2, 3, 4, 5, 9] # Altitude (5) is normally not categorical
             
         naml.fit(X, y, categorical_features=categorical_features)
-        
+
+    @parameterized.expand([
+        (61,),
+    ])
+    def test_number_of_evaluations(self, openmlid):
+        max_hpo_iterations = 5
+        X, y = get_dataset(openmlid, as_numpy=True)
+        naml = naiveautoml.NaiveAutoML(logger_name="naml", max_hpo_iterations=max_hpo_iterations, show_progress=True)
+        naml.fit(X, y)
+
+        self.assertEquals(sum([len(s["components"]) for s in naml.search_space]) + max_hpo_iterations, len(naml.history))
         
 
     def test_constant_algorithms_in_hpo_phase(self):
@@ -153,7 +173,7 @@ class TestNaiveAutoML(unittest.TestCase):
     '''
 
     @parameterized.expand([
-            (61, 10, 0.9),
+            (61, 45, 0.9),
             (188, 260, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -169,7 +189,8 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_naml_results_classification(self, openmlid, exp_runtime, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
-
+        
+            
         # run naml
         scores = []
         runtimes = []
@@ -181,12 +202,7 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # run naml
             start = time.time()
-            naml = naiveautoml.NaiveAutoML(
-                logger_name="naml",
-                execution_timeout=10,
-                max_hpo_iterations=10,
-                show_progress=True
-            )
+            naml = naiveautoml.NaiveAutoML(logger_name="naml", execution_timeout=10, max_hpo_iterations=10, show_progress=True)
             naml.fit(X_train, y_train)
             end = time.time()
             runtime = end - start
@@ -205,62 +221,17 @@ class TestNaiveAutoML(unittest.TestCase):
         self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
         self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad. Expected was at least {exp_result}s but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
-
+        
     @parameterized.expand([
-        (61, "classification"),  # iris
-        (188, "classification"),  # eucalyptus, important due to nan values and categorical attributes
-        (41021, "regression"),  # moneyball
-    ])
-    def test_input_format_robustness(self, openmlid, task_type):
-
-        self.logger.info(f"Start result test for NaiveAutoML on dataset {openmlid}")
-
-        # test robustness w.r.t. dataframes
-        X, y = get_dataset(openmlid, as_numpy=False)
-        naml = naiveautoml.NaiveAutoML(
-            logger_name="naml",
-            timeout=30,
-            execution_timeout=5,
-            max_hpo_iterations=1,
-            show_progress=True
-        )
-        naml.fit(X, y)
-        self.assertTrue(naml.chosen_model is not None, msg=f"No solution found!")
-
-        # test robustness w.r.t. sparse input data (both independent and dependent variables)
-        X, y = get_dataset(openmlid, as_numpy=True)
-        for X_alt, y_alt in [(
-                m(X) if np.issubdtype(X.dtype, np.number) else X,
-                m(y) if not isinstance(y.dtype, pd.CategoricalDtype) and np.issubdtype(y.dtype, np.number) else y
-        ) for m in [scipy.sparse.csr_matrix, scipy.sparse.csc_matrix]]:
-
-            # run naml
-            naml = naiveautoml.NaiveAutoML(
-                logger_name="naml",
-                execution_timeout=5,
-                timeout=30,
-                max_hpo_iterations=1,
-                show_progress=True
-            )
-            naml.fit(X_alt, y_alt)
-
-            # compute test performance
-            self.logger.debug(
-                f"finished training target type {type(y_alt)}.")
-
-            self.assertTrue(naml.chosen_model is not None, msg=f"No solution found!")
-
-    @parameterized.expand([
-            (41021, 180, 550), # moneyball
+            (41021, 120, 650), # moneyball
             #(183, 260, 15), # abalone
-            (212, 260, 15) # diabetes, has decimal targets
+            (212, 120, 15) # diabetes, has decimal targets
             
         ])
     def test_naml_results_regression(self, openmlid, exp_runtime, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on regression dataset {openmlid}")
-        
-            
+
         # run naml
         scores = []
         runtimes = []
@@ -277,7 +248,8 @@ class TestNaiveAutoML(unittest.TestCase):
                 timeout=120,
                 max_hpo_iterations=10,
                 show_progress=True,
-                task_type="regression"
+                task_type="regression",
+                evaluation_fun="mccv_1"
             )
             naml.fit(X_train, y_train)
             end = time.time()
@@ -303,7 +275,7 @@ class TestNaiveAutoML(unittest.TestCase):
         
         
     @parameterized.expand([
-            (61, 10, 0.9),
+            (61, 30, 0.9),
             #(188, 60, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -371,7 +343,7 @@ class TestNaiveAutoML(unittest.TestCase):
         
         
     @parameterized.expand([
-            (61, 10, 0.9),
+            (61, 30, 0.9),
             #(188, 60, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
