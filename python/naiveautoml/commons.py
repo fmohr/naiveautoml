@@ -228,7 +228,9 @@ class EvaluationPool:
 
             process = psutil.Process(os.getpid())
             mem = int(process.memory_info().rss / 1024 / 1024)
-            self.logger.info(f"Initializing evaluation of {pl}. Current memory consumption {mem}MB. Now awaiting results.")
+            self.logger.info(
+                f"Initializing evaluation of {pl}. Current memory consumption {mem}MB. Now awaiting results."
+            )
 
             start_outer = time.time()
             spl = str(pl)
@@ -272,8 +274,9 @@ class EvaluationPool:
 
             if not isinstance(scores, dict):
                 raise TypeError(f"""
-                scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
-                Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
+                scores is of type {type(scores)} but must be a dictionary
+                with entries for {get_scoring_name(self.scoring)}. Probably you inserted an
+                evaluation_fun argument that does not return a proper dictionary."""
                                 )
 
             self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
