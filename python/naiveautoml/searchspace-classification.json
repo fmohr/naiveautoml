@@ -584,6 +584,100 @@
         "name": "learner",
         "components": [
             {
+                "class": "sklearn.naive_bayes.BernoulliNB",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "alpha",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 0.01,
+                            "upper": 100.0,
+                            "default": 1.0
+                        },
+                        {
+                            "name": "fit_prior",
+                            "type": "categorical",
+                            "choices": [
+                                "True",
+                                "False"
+                            ],
+                            "default": "True",
+                            "probabilities": null
+                        }
+                    ],
+                    "conditions": [],
+                    "forbiddens": [],
+                    "python_module_version": "0.4.20",
+                    "json_format_version": 0.2
+                }
+            },
+            {
+                "class": "sklearn.tree._classes.DecisionTreeClassifier",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "criterion",
+                            "type": "categorical",
+                            "choices": [
+                                "gini",
+                                "entropy"
+                            ],
+                            "default": "gini",
+                            "probabilities": null
+                        },
+                        {
+                            "name": "max_depth_factor",
+                            "type": "uniform_float",
+                            "log": false,
+                            "lower": 0.0,
+                            "upper": 2.0,
+                            "default": 0.5
+                        },
+                        {
+                            "name": "max_features",
+                            "type": "constant",
+                            "value": 1.0
+                        },
+                        {
+                            "name": "max_leaf_nodes",
+                            "type": "constant",
+                            "value": "None"
+                        },
+                        {
+                            "name": "min_impurity_decrease",
+                            "type": "constant",
+                            "value": 0.0
+                        },
+                        {
+                            "name": "min_samples_leaf",
+                            "type": "uniform_int",
+                            "log": false,
+                            "lower": 1,
+                            "upper": 20,
+                            "default": 1
+                        },
+                        {
+                            "name": "min_samples_split",
+                            "type": "uniform_int",
+                            "log": false,
+                            "lower": 2,
+                            "upper": 20,
+                            "default": 2
+                        },
+                        {
+                            "name": "min_weight_fraction_leaf",
+                            "type": "constant",
+                            "value": 0.0
+                        }
+                    ],
+                    "conditions": [],
+                    "forbiddens": [],
+                    "python_module_version": "0.4.20",
+                    "json_format_version": 0.2
+                }
+            },
+            {
                 "class": "sklearn.ensemble._forest.ExtraTreesClassifier",
                 "params": {
                     "hyperparameters": [
@@ -659,74 +753,9 @@
                 }
             },
             {
-                "class": "sklearn.ensemble._forest.RandomForestClassifier",
+                "class": "sklearn.naive_bayes.GaussianNB",
                 "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "bootstrap",
-                            "type": "categorical",
-                            "choices": [
-                                "True",
-                                "False"
-                            ],
-                            "default": "True",
-                            "probabilities": null
-                        },
-                        {
-                            "name": "criterion",
-                            "type": "categorical",
-                            "choices": [
-                                "gini",
-                                "entropy"
-                            ],
-                            "default": "gini",
-                            "probabilities": null
-                        },
-                        {
-                            "name": "max_depth",
-                            "type": "constant",
-                            "value": "None"
-                        },
-                        {
-                            "name": "max_features",
-                            "type": "uniform_float",
-                            "log": false,
-                            "lower": 0.0,
-                            "upper": 1.0,
-                            "default": 0.5
-                        },
-                        {
-                            "name": "max_leaf_nodes",
-                            "type": "constant",
-                            "value": "None"
-                        },
-                        {
-                            "name": "min_impurity_decrease",
-                            "type": "constant",
-                            "value": 0.0
-                        },
-                        {
-                            "name": "min_samples_leaf",
-                            "type": "uniform_int",
-                            "log": false,
-                            "lower": 1,
-                            "upper": 20,
-                            "default": 1
-                        },
-                        {
-                            "name": "min_samples_split",
-                            "type": "uniform_int",
-                            "log": false,
-                            "lower": 2,
-                            "upper": 20,
-                            "default": 2
-                        },
-                        {
-                            "name": "min_weight_fraction_leaf",
-                            "type": "constant",
-                            "value": 0.0
-                        }
-                    ],
+                    "hyperparameters": [],
                     "conditions": [],
                     "forbiddens": [],
                     "python_module_version": "0.4.20",
@@ -839,110 +868,6 @@
                             "value": "valid"
                         }
                     ],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
-                "class": "sklearn.naive_bayes.BernoulliNB",
-                "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "alpha",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 0.01,
-                            "upper": 100.0,
-                            "default": 1.0
-                        },
-                        {
-                            "name": "fit_prior",
-                            "type": "categorical",
-                            "choices": [
-                                "True",
-                                "False"
-                            ],
-                            "default": "True",
-                            "probabilities": null
-                        }
-                    ],
-                    "conditions": [],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
-                "class": "sklearn.tree._classes.DecisionTreeClassifier",
-                "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "criterion",
-                            "type": "categorical",
-                            "choices": [
-                                "gini",
-                                "entropy"
-                            ],
-                            "default": "gini",
-                            "probabilities": null
-                        },
-                        {
-                            "name": "max_depth_factor",
-                            "type": "uniform_float",
-                            "log": false,
-                            "lower": 0.0,
-                            "upper": 2.0,
-                            "default": 0.5
-                        },
-                        {
-                            "name": "max_features",
-                            "type": "constant",
-                            "value": 1.0
-                        },
-                        {
-                            "name": "max_leaf_nodes",
-                            "type": "constant",
-                            "value": "None"
-                        },
-                        {
-                            "name": "min_impurity_decrease",
-                            "type": "constant",
-                            "value": 0.0
-                        },
-                        {
-                            "name": "min_samples_leaf",
-                            "type": "uniform_int",
-                            "log": false,
-                            "lower": 1,
-                            "upper": 20,
-                            "default": 1
-                        },
-                        {
-                            "name": "min_samples_split",
-                            "type": "uniform_int",
-                            "log": false,
-                            "lower": 2,
-                            "upper": 20,
-                            "default": 2
-                        },
-                        {
-                            "name": "min_weight_fraction_leaf",
-                            "type": "constant",
-                            "value": 0.0
-                        }
-                    ],
-                    "conditions": [],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
-                "class": "sklearn.naive_bayes.GaussianNB",
-                "params": {
-                    "hyperparameters": [],
-                    "conditions": [],
                     "forbiddens": [],
                     "python_module_version": "0.4.20",
                     "json_format_version": 0.2
@@ -1433,6 +1358,81 @@
                             "lower": 0.0,
                             "upper": 1.0,
                             "default": 0.0
+                        }
+                    ],
+                    "conditions": [],
+                    "forbiddens": [],
+                    "python_module_version": "0.4.20",
+                    "json_format_version": 0.2
+                }
+            },
+            {
+                "class": "sklearn.ensemble._forest.RandomForestClassifier",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "bootstrap",
+                            "type": "categorical",
+                            "choices": [
+                                "True",
+                                "False"
+                            ],
+                            "default": "True",
+                            "probabilities": null
+                        },
+                        {
+                            "name": "criterion",
+                            "type": "categorical",
+                            "choices": [
+                                "gini",
+                                "entropy"
+                            ],
+                            "default": "gini",
+                            "probabilities": null
+                        },
+                        {
+                            "name": "max_depth",
+                            "type": "constant",
+                            "value": "None"
+                        },
+                        {
+                            "name": "max_features",
+                            "type": "uniform_float",
+                            "log": false,
+                            "lower": 0.0,
+                            "upper": 1.0,
+                            "default": 0.5
+                        },
+                        {
+                            "name": "max_leaf_nodes",
+                            "type": "constant",
+                            "value": "None"
+                        },
+                        {
+                            "name": "min_impurity_decrease",
+                            "type": "constant",
+                            "value": 0.0
+                        },
+                        {
+                            "name": "min_samples_leaf",
+                            "type": "uniform_int",
+                            "log": false,
+                            "lower": 1,
+                            "upper": 20,
+                            "default": 1
+                        },
+                        {
+                            "name": "min_samples_split",
+                            "type": "uniform_int",
+                            "log": false,
+                            "lower": 2,
+                            "upper": 20,
+                            "default": 2
+                        },
+                        {
+                            "name": "min_weight_fraction_leaf",
+                            "type": "constant",
+                            "value": 0.0
                         }
                     ],
                     "conditions": [],

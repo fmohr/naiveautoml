@@ -220,66 +220,73 @@ class EvaluationPool:
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
 
-        if is_pipeline_forbidden(pl):
-            self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
-            return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
+        try:
 
-        process = psutil.Process(os.getpid())
-        mem = int(process.memory_info().rss / 1024 / 1024)
-        self.logger.info(f"Initializing evaluation of {pl}. Current memory consumption {mem}MB. Now awaiting results.")
+            if is_pipeline_forbidden(pl):
+                self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
+                return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
 
-        start_outer = time.time()
-        spl = str(pl)
-        if self.use_caching and spl in self.cache:
-            out = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
-            out[get_scoring_name(self.scoring)] = np.round(np.mean(self.cache[spl][1]), 4)
-            return out
-        timestamp = time.time()
-        if timeout is not None:
-            if timeout > 1:
-                with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
-                    if hasattr(self.evaluation_fun, "errors"):
-                        scores = limited_evaluation(
-                            pl,
-                            self.X,
-                            self.y,
-                            [self.scoring] + self.side_scores,
-                            errors="ignore"
-                        )
-                    else:
-                        scores = limited_evaluation(
-                            pl,
-                            self.X,
-                            self.y,
-                            [self.scoring] + self.side_scores
-                        )
-            else:  # no time left
-                scores = None
-        else:
-            scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
-        if scores is None:
-            return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
-        runtime = time.time() - start_outer
+            process = psutil.Process(os.getpid())
+            mem = int(process.memory_info().rss / 1024 / 1024)
+            self.logger.info(f"Initializing evaluation of {pl}. Current memory consumption {mem}MB. Now awaiting results.")
 
-        # if scores is a 2-tuple, it is assumed that the evaluator object returned itself (in an altered version)
-        if isinstance(scores, tuple):
-            if not isinstance(scores[1], type(self.evaluation_fun)):
-                raise ValueError(
-                    "If an evaluation function returns an object in its second output,"
-                    "the type must coincide to the previous one!"
-                )
-            self.evaluation_fun = scores[1]
-            scores = scores[0]
-
-        if not isinstance(scores, dict):
-            raise TypeError(f"""
-            scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
-            Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
+            start_outer = time.time()
+            spl = str(pl)
+            if self.use_caching and spl in self.cache:
+                out = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
+                out[get_scoring_name(self.scoring)] = np.round(np.mean(self.cache[spl][1]), 4)
+                return out
+            timestamp = time.time()
+            if timeout is not None:
+                if timeout > 1:
+                    with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
+                        if hasattr(self.evaluation_fun, "errors"):
+                            scores = limited_evaluation(
+                                pl,
+                                self.X,
+                                self.y,
+                                [self.scoring] + self.side_scores,
+                                errors="ignore"
                             )
+                        else:
+                            scores = limited_evaluation(
+                                pl,
+                                self.X,
+                                self.y,
+                                [self.scoring] + self.side_scores
+                            )
+                else:  # no time left
+                    scores = None
+            else:
+                scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
 
-        self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
-        self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
-        return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
+            # here we give the evaluator the chance to update itself
+            # this looks funny, but it is done because the evaluation could have been done with a copy of the evaluator
+            if hasattr(self.evaluation_fun, "update"):
+                self.evaluation_fun.update(pl, scores)
+
+            # if no score was observed, return results here
+            if scores is None:
+                return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
+            runtime = time.time() - start_outer
+
+            if not isinstance(scores, dict):
+                raise TypeError(f"""
+                scores is of type {type(scores)} but must be a dictionary with entries for {get_scoring_name(self.scoring)}.
+                Probably you inserted an evaluation_fun argument that does not return a proper dictionary."""
+                                )
+
+            self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
+            self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
+            return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
+
+        # if there was an exception, then tell the evaluator function about a nan
+        except Exception:
+            if hasattr(self.evaluation_fun, "update"):
+                self.evaluation_fun.update(pl, {
+                    get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores
+                })
+            raise
 
 
 def fullname(o):
