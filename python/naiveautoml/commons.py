@@ -375,6 +375,7 @@ class EvaluationPool:
                 return True
         return False
 
+
 def fullname(o):
     module = o.__module__
     if module is None or module == str.__class__.__module__:
@@ -1269,7 +1270,6 @@ def get_all_configurations(config_spaces):
             configs.append({name: combo[i] for i, name in enumerate(names)})
         configs_by_comps[step_name] = configs
     return configs_by_comps
-
 
 
 class HPOProcess:
