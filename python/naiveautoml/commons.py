@@ -294,7 +294,6 @@ class EvaluationPool:
     def is_pipeline_forbidden(self, pl):
 
         # forbid pipelines with SVMs if the main scoring function requires probabilities
-        print(pl)
         if pl["learner"].__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC]:
             if build_scorer(self.scoring)._response_method == "predict_proba":
                 return True
