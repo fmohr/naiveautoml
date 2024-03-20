@@ -714,7 +714,6 @@ class NaiveAutoML:
         return scores
 
     def predict(self, X):
-        print(self.pl)
         return self.pl.predict(X)
 
     def predict_proba(self, X):

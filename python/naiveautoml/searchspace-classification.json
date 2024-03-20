@@ -767,7 +767,7 @@
                         {
                             "name": "loss",
                             "type": "constant",
-                            "value": "auto"
+                            "value": "log_loss"
                         },
                         {
                             "name": "max_bins",

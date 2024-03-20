@@ -13,7 +13,7 @@ setup(
   install_requires=[
           'numpy',
           'pandas',
-          'scikit-learn',
+          'scikit-learn>=1.4',
           'configspace<0.7.1',
           'scipy',
           'pynisher',
