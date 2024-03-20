@@ -192,7 +192,6 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_naml_results_classification(self, openmlid, exp_runtime, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
-        
             
         # run naml
         scores = []
@@ -205,7 +204,12 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # run naml
             start = time.time()
-            naml = naiveautoml.NaiveAutoML(logger_name="naml", execution_timeout=10, max_hpo_iterations=10, show_progress=True)
+            naml = naiveautoml.NaiveAutoML(
+                logger_name="naml",
+                execution_timeout=10,
+                max_hpo_iterations=10,
+                show_progress=True
+            )
             naml.fit(X_train, y_train)
             end = time.time()
             runtime = end - start
