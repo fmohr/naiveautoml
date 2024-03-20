@@ -192,7 +192,6 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_naml_results_classification(self, openmlid, exp_runtime, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
-        
             
         # run naml
         scores = []

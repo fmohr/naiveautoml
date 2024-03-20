@@ -25,7 +25,7 @@ from .commons import\
     build_scorer, \
     get_step_with_name, \
     EvaluationPool, \
-    build_estimator, is_component_defined_in_steps, get_scoring_name, is_pipeline_forbidden, HPOProcess
+    build_estimator, is_component_defined_in_steps, get_scoring_name, HPOProcess
 
 import json
 import numpy as np
@@ -211,7 +211,7 @@ class NaiveAutoML:
 
         for combo in it.product(*algorithms_per_stage):
             pl = Pipeline(steps=[(names[i], clazz()) for i, clazz in enumerate(combo) if clazz is not None])
-            if is_pipeline_forbidden(pl):
+            if pool.is_pipeline_forbidden(pl):
                 self.logger.debug("SKIP FORBIDDEN")
             else:
                 pool.evaluate(pl, timeout=self.execution_timeout)
@@ -256,7 +256,7 @@ class NaiveAutoML:
         pl = Pipeline(self.mandatory_pre_processing + steps)
         self.logger.debug(f"Original final pipeline is: {pl}")
         i = 0
-        while is_pipeline_forbidden(pl):
+        while hpo_process.pool.is_pipeline_forbidden(pl):
             i += 1
             self.logger.debug("Invalid pipeline, removing first element!")
             pl = Pipeline(steps=self.mandatory_pre_processing + steps[i:])
