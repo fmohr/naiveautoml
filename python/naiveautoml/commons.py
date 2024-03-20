@@ -745,7 +745,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
     if clazz == sklearn.svm.SVC:
         kernel = params["kernel"]
         if len(params) == 1:
-            return sklearn.svm.SVC(kernel=kernel, probability=True)
+            return sklearn.svm.SVC(kernel=kernel, probability=False)
 
         C = float(params["C"])
         if "degree" not in params or params["degree"] is None:
