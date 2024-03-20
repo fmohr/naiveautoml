@@ -228,7 +228,7 @@ class TestNaiveAutoML(unittest.TestCase):
     @parameterized.expand([
             (41021, 120, 650), # moneyball
             #(183, 260, 15), # abalone
-            (212, 120, 15) # diabetes, has decimal targets
+            (212, 120, 15)  # diabetes, has decimal targets
             
         ])
     def test_naml_results_regression(self, openmlid, exp_runtime, exp_result):
@@ -248,7 +248,7 @@ class TestNaiveAutoML(unittest.TestCase):
             start = time.time()
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
-                timeout=120,
+                timeout=75,
                 max_hpo_iterations=10,
                 show_progress=True,
                 task_type="regression",
@@ -324,7 +324,13 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # run naml
             start = time.time()
-            naml = naiveautoml.NaiveAutoML(logger_name="naml", max_hpo_iterations=10, show_progress=True, scoring = scoring1, side_scores=[scoring2])
+            naml = naiveautoml.NaiveAutoML(
+                logger_name="naml",
+                max_hpo_iterations=10,
+                show_progress=True,
+                scoring = scoring1,
+                side_scores=[scoring2]
+            )
             naml.fit(X_train, y_train)
             end = time.time()
             runtime = end - start
