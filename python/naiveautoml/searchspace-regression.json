@@ -181,7 +181,9 @@
                             "choices": [
                                 "euclidean",
                                 "manhattan",
-                                "cosine"
+                                "cosine",
+                                "l1",
+                                "l2"
                             ],
                             "default": "euclidean",
                             "probabilities": null
@@ -228,7 +230,9 @@
                                     "type": "IN",
                                     "values": [
                                         "cosine",
-                                        "manhattan"
+                                        "manhattan",
+                                        "l1",
+                                        "l2"
                                     ]
                                 },
                                 {

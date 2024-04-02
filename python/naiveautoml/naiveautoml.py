@@ -18,6 +18,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OrdinalEncoder
 
 # naiveautoml commons
 from .commons import\
@@ -120,7 +121,12 @@ class NaiveAutoML:
         self.sparse = sparse
         self.mandatory_pre_processing = None
 
+        # state variables
+        self.X = None
+        self.y = None
+        self.y_encoded = None
         self.task_type = task_type
+        self.inferred_task_type = None
         self.opt_ordering = opt_ordering
 
         # init logger
@@ -160,7 +166,7 @@ class NaiveAutoML:
             return self.task_type
 
     def get_evaluation_pool(self, X, y):
-        task_type = self.get_task_type(X, y)
+        task_type = self.inferred_task_type
         return EvaluationPool(
             task_type,
             X,
@@ -172,11 +178,11 @@ class NaiveAutoML:
         )
 
     def get_standard_learner_instance(self, X, y):
-        return self.standard_classifier() if self.get_task_type(X, y) == "classification" else self.standard_regressor()
+        return self.standard_classifier() if self.inferred_task_type == "classification" else self.standard_regressor()
 
-    def register_search_space(self, X, y):
+    def register_search_space(self):
 
-        task_type = self.get_task_type(X, y)
+        task_type = self.inferred_task_type
         self.logger.info(f"Automatically inferred task type: {task_type}")
 
         ''' search_space is a string or a list of dictionaries
@@ -342,8 +348,8 @@ class NaiveAutoML:
                     if self.raise_errors:
                         raise
                     else:
-                        self.logger.warning(
-                            "Observed exception during the evaluation."
+                        self.logger.info(
+                            "Observed exception during the evaluation. "
                             f"The trace is as follows:\n{exception}"
                         )
                 if status != "ok":
@@ -416,38 +422,41 @@ class NaiveAutoML:
         if self.show_progress:
             pbar.close()
 
+    def get_hpo_process(self, selected_components_by_step):
+        if self.X is None or self.y is None:
+            raise ValueError(
+                "Apparently, NAML has not been initialized. Use reset to do so before requesting an HPO process."
+            )
+        step_names = [decision[0] for decision in selected_components_by_step]
+        return HPOProcess(
+            task_type=self.inferred_task_type,
+            step_names=step_names,
+            comps_by_steps=selected_components_by_step,
+            X=self.X,
+            y=self.y_encoded,
+            scoring=self.scoring,
+            side_scores=self.side_scores,
+            evaluation_fun=self.evaluation_fun,
+            execution_timeout=self.execution_timeout,
+            mandatory_pre_processing=self.mandatory_pre_processing,
+            max_time_without_imp=self.max_hpo_time_without_imp,
+            max_its_without_imp=self.max_hpo_iterations_without_imp,
+            allow_exhaustive_search=(self.max_hpo_iterations is None),
+            logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
+        )
+
     def tune_parameters(self, X, y):
 
         # now conduct HPO until there is no local improvement or the deadline is hit
         self.logger.info("--------------------------------------------------")
         self.logger.info("Entering HPO phase")
         self.logger.info("--------------------------------------------------")
-        task_type = self.get_task_type(X, y)
 
         # read variables from state
-        decisions = self.decisions
         components_with_score = self.components_with_score
 
         # create HPO processes for each slot, taking into account the default parametrized component of each other slot
-        step_names = [decision[0] for decision in decisions]
-        self.hpo_process = HPOProcess(
-            task_type=task_type,
-            step_names=step_names,
-            comps_by_steps=decisions,
-            X=X,
-            y=y,
-            scoring=self.scoring,
-            side_scores=self.side_scores,
-            evaluation_fun=self.evaluation_fun,
-            execution_timeout=self.execution_timeout,
-            mandatory_pre_processing=self.mandatory_pre_processing,
-            # other_step_component_instances=other_instances,
-            # index_in_steps=index,
-            max_time_without_imp=self.max_hpo_time_without_imp,
-            max_its_without_imp=self.max_hpo_iterations_without_imp,
-            allow_exhaustive_search=(self.max_hpo_iterations is None),
-            logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
-        )
+        self.hpo_process = self.get_hpo_process(self.decisions)
         self.hpo_process.best_score = np.max(list(components_with_score.values()))  # best performance of default config
 
         # starting HPO process
@@ -507,7 +516,18 @@ class NaiveAutoML:
         if self.show_progress:
             pbar.close()
 
-    def get_mandatory_preprocessing(self, X, y, categorical_features):
+    def get_mandatory_preprocessing(self, X=None, y=None, categorical_features=None):
+
+        if (X is None or y is None) and (self.X is None or self.y is None):
+            raise ValueError(
+                "Cannot infer pre-processing without data having been set. "
+                "Use the reset method to do so or pass arguments X or y."
+            )
+
+        if X is None:
+            X = self.X
+        if y is None:
+            y = self.y
 
         # determine categorical attributes and necessity of binarization
         sparse_training_data = sp.sparse.issparse(X)
@@ -592,16 +612,20 @@ class NaiveAutoML:
 
     def reset(self, X, y, categorical_features=None):
 
-        # register search space
-        self.register_search_space(X, y)
-
         # initialize
         self.pl = None
+        self.X = X
+        self.y = y
         self.best_score_overall = -np.inf
         self.history = []
         self.start_time = time.time()
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
         task_type = self.get_task_type(X, y)
+        self.inferred_task_type = task_type
+
+        # register search space
+        self.register_search_space()
+
         if self.scoring is None:
             if task_type == "classification":
                 self.scoring = "roc_auc" if len(np.unique(y)) == 2 else "neg_log_loss"
@@ -632,10 +656,14 @@ class NaiveAutoML:
                 summary += "\n\t" + comp['class']
         self.logger.info(f"These are the components used by NaiveAutoML in the upcoming process (by steps):{summary}")
 
-    def fit(self, X, y, categorical_features=None):
+        # encode targets if necessary
+        self.y_encoded = self.substitute_targets(self.y.copy())
 
-        # if y is sparse, create a dense alternative
-        if self.get_task_type(X, y) == "regression":
+    def substitute_targets(self, y):
+        if self.inferred_task_type is None:
+            raise Exception("Task has not been inferred yet. Run reset to do so.")
+
+        if self.inferred_task_type == "regression":
             if not isinstance(y, np.ndarray) or not np.issubdtype(y.dtype, np.number):
                 if isinstance(y, sp.sparse.spmatrix):
                     y = y.toarray().astype(float).reshape(-1)
@@ -651,26 +679,34 @@ class NaiveAutoML:
                     f"It has now shape {y.shape}."
                 )
 
+        # for classification tasks, internally create a numerical version of the labels to avoid problems
+        else:
+            y = OrdinalEncoder().fit_transform(np.array([y]).T).T[0]
+        return y
+
+    def fit(self, X, y, categorical_features=None):
+
+        # infer task type
         self.reset(X, y, categorical_features)
 
         # choose algorithms
-        self.choose_algorithms(X, y)
+        self.choose_algorithms(self.X, self.y_encoded)
         if self.decisions:
             self.steps_after_which_algorithm_selection_was_completed = len(self.history)
 
             # tune parameters
-            self.tune_parameters(X, y)
+            self.tune_parameters(self.X, self.y_encoded)
 
             # train final pipeline
             self.logger.info("--------------------------------------------------")
             self.logger.info("Search Completed. Building final pipeline.")
             self.logger.info("--------------------------------------------------")
-            self.pl = self.build_pipeline(self.hpo_process, X, y)
+            self.pl = self.build_pipeline(self.hpo_process, self.X, self.y)
             self.logger.info(self.pl)
             self.logger.info("Now fitting the pipeline with all given data.")
             while len(self.pl.steps) > 0:
                 try:
-                    self.pl.fit(X, y)
+                    self.pl.fit(self.X, self.y)
                     break
                 except Exception:
                     self.logger.warning("There was a problem in building the pipeline, cutting it one down!")

@@ -224,8 +224,8 @@ class EvaluationPool:
 
             if self.is_pipeline_forbidden(pl):
                 self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
+                scores = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
                 if hasattr(self.evaluation_fun, "update"):
-                    scores = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
                     self.evaluation_fun.update(pl, scores)
                 return scores
 

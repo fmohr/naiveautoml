@@ -230,7 +230,9 @@
                                     "type": "IN",
                                     "values": [
                                         "cosine",
-                                        "manhattan"
+                                        "manhattan",
+                                        "l1",
+                                        "l2"
                                     ]
                                 },
                                 {
