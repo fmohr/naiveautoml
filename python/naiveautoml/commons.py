@@ -261,7 +261,7 @@ class EvaluationPool:
                                 [self.scoring] + self.side_scores
                             )
                 else:  # no time left
-                    scores = None
+                    raise pynisher.WallTimeoutException()
             else:
                 scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
 
@@ -405,12 +405,14 @@ def check_none(p: str) -> bool:
     return False
 
 
-def check_for_bool(p: str) -> bool:
+def check_for_bool(p: str, allow_non_bool=False) -> bool:
     if check_false(p):
         return False
     elif check_true(p):
         return True
     else:
+        if allow_non_bool:
+            return p
         raise ValueError("%s is not a bool" % str(p))
 
 
@@ -471,7 +473,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
     if clazz == sklearn.decomposition.FastICA:
         algorithm = params["algorithm"]
         fun = params["fun"]
-        whiten = check_for_bool(params["whiten"])
+        whiten = check_for_bool(params["whiten"], allow_non_bool=True)
         n_components = int(params["n_components"]) if whiten else None
         return sklearn.decomposition.FastICA(
             n_components=n_components,
@@ -624,9 +626,10 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
 
     if clazz == sklearn.ensemble.ExtraTreesRegressor:
         n_estimators = 10**3
-        if params["criterion"] not in ("mse", "friedman_mse", "mae", "squared_error"):
+        if params["criterion"] not in ("squared_error", "friedman_mse", "absolute_error", "poisson"):
             raise ValueError(
-                "'criterion' is not in ('mse', 'friedman_mse', 'mae', 'squared_error'): %s" % params["criterion"]
+                "'criterion' is not in ('squared_error', 'friedman_mse', 'absolute_error', 'poisson'): "
+                f"{params['criterion']}"
             )
 
         if check_none(params["max_depth"]):
@@ -678,8 +681,10 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
 
     if clazz == sklearn.ensemble.HistGradientBoostingRegressor:
         learning_rate = float(params["learning_rate"])
+        quantile = float(params["quantile"]) if "quantile" in params else None
         max_iter = 1000
         min_samples_leaf = int(params["min_samples_leaf"])
+
         if check_none(params["max_depth"]):
             max_depth = None
         else:
@@ -723,6 +728,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             validation_fraction=validation_fraction_,
             verbose=False,
             warm_start=False,
+            quantile=quantile
         )
 
     if clazz == sklearn.svm.LinearSVC:
@@ -1428,7 +1434,13 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                     "Stopping HPO here."
                 )
                 self.active = False
-                return
+                return (
+                    self.get_parametrized_pipeline(configs_by_comps),
+                    "no_imp",
+                    {s: np.nan for s in [self.scoring] + self.side_scores},
+                    None,
+                    None
+                )
 
         # check whether we do a quick exhaustive search and then disable this module
         if len(self.eval_runtimes) >= 10:

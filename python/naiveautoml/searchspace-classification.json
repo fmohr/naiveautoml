@@ -143,7 +143,8 @@
                             "type": "categorical",
                             "choices": [
                                 "False",
-                                "True"
+                                "arbitrary-variance",
+                                "unit-variance"
                             ],
                             "default": "False",
                             "probabilities": null
@@ -161,8 +162,8 @@
                         {
                             "child": "n_components",
                             "parent": "whiten",
-                            "type": "EQ",
-                            "value": "True"
+                            "type": "IN",
+                            "values": ["arbitrary-variance", "unit-variance"]
                         }
                     ],
                     "forbiddens": [],
@@ -175,9 +176,11 @@
                 "params": {
                     "hyperparameters": [
                         {
-                            "name": "affinity",
+                            "name": "metric",
                             "type": "categorical",
                             "choices": [
+                                "l1",
+                                "l2",
                                 "euclidean",
                                 "manhattan",
                                 "cosine"
@@ -219,11 +222,11 @@
                     "conditions": [],
                     "forbiddens": [
                         {
-                            "name": "affinity",
+                            "name": "metric",
                             "type": "AND",
                             "clauses": [
                                 {
-                                    "name": "affinity",
+                                    "name": "metric",
                                     "type": "IN",
                                     "values": [
                                         "cosine",

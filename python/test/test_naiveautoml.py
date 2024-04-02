@@ -1,5 +1,6 @@
 import logging
 import naiveautoml
+from naiveautoml.commons import HPOProcess
 import numpy as np
 import sklearn.datasets
 from sklearn import *
@@ -40,11 +41,14 @@ class TestNaiveAutoML(unittest.TestCase):
     
     @staticmethod
     def setUpClass():
+
+        log_level_tester = logging.INFO
+
         # setup logger for this test suite
         logger = logging.getLogger('naml_test')
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(log_level_tester)
         ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
+        ch.setLevel(log_level_tester)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         ch.setFormatter(formatter)
         logger.addHandler(ch)
@@ -489,3 +493,69 @@ class TestNaiveAutoML(unittest.TestCase):
                         msg=f"Returned solution was bad. Expected was at least {exp_result} but true avg score was {score_mean}")
         self.logger.info(
             f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
+
+    def test_searchspaces(self):
+
+        for openmlid, task_type in {
+            61: "classification",
+            531: "regression"
+        }.items():
+
+            X, y = get_dataset(openmlid)
+
+            naml = naiveautoml.NaiveAutoML(
+                search_space=f"naiveautoml/searchspace-{task_type}.json"
+            )
+            mandatory_pre_processing = naml.get_mandatory_preprocessing(X, y, None)
+
+            if mandatory_pre_processing:
+                X = sklearn.pipeline.Pipeline(mandatory_pre_processing).fit_transform(X)
+
+            preprocessors = naml.search_space[0]["components"] + naml.search_space[1]["components"]
+            learners = naml.search_space[2]["components"]
+
+            for algo_type, algo_set in zip(["pp", "learner"], [preprocessors, learners]):
+
+                for algo in algo_set:
+                    self.logger.info(f"Next algorithm: {algo['class']}")
+                    if algo_type == "learner":
+                        steps = [("learner", algo)]
+                    else:
+                        steps = [("pp", algo), ("learner", learners[3 if task_type == "classification" else 0])]
+                        self.logger.info(f"This is a pre-processor. Using {steps[-1][1]['class']} as learner.")
+
+                    scoring = "accuracy" if task_type == "classification" else "r2"
+                    hpo_process = HPOProcess(
+                        task_type=task_type,
+                        step_names=[e[0] for e in steps],
+                        comps_by_steps=steps,
+                        X=X,
+                        y=y,
+                        mandatory_pre_processing=mandatory_pre_processing,
+                        scoring=scoring,
+                        side_scores=None,
+                        evaluation_fun=None,
+                        execution_timeout=1.5,
+                        max_time_without_imp=10,
+                        max_its_without_imp=10,
+                        allow_exhaustive_search=False
+                    )
+
+                    for _ in range(10):
+                        pl, status, scores, runtime, exception = hpo_process.step()
+                        self.assertFalse(
+                            np.isnan(scores[scoring]) and status == "ok",
+                            "Observed nan score even though status is ok"
+                        )
+                        self.logger.debug(f"{_}: {status} {scores}")
+                        if status == "exception":
+                            allowed_exception_texts = [
+                                "There are significant negative eigenvalues",
+                                "ValueError: array must not contain infs or NaNs"
+                            ]
+                            if not any([t in exception for t in allowed_exception_texts]):
+                                self.logger.exception(exception)
+                                self.fail("Status must not be an (not white-listed) exception!")
+
+                        if status not in ["ok", "timeout"]:
+                            self.logger.warning(f"Observed uncommon status \"{status}\".")

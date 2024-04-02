@@ -143,7 +143,8 @@
                             "type": "categorical",
                             "choices": [
                                 "False",
-                                "True"
+                                "arbitrary-variance",
+                                "unit-variance"
                             ],
                             "default": "False",
                             "probabilities": null
@@ -161,8 +162,8 @@
                         {
                             "child": "n_components",
                             "parent": "whiten",
-                            "type": "EQ",
-                            "value": "True"
+                            "type": "IN",
+                            "values": ["arbitrary-variance", "unit-variance"]
                         }
                     ],
                     "forbiddens": [],
@@ -491,36 +492,6 @@
                                 "True"
                             ],
                             "default": "False",
-                            "probabilities": null
-                        }
-                    ],
-                    "conditions": [],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
-                "class": "sklearn.feature_selection._univariate_selection.SelectPercentile",
-                "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "percentile",
-                            "type": "uniform_float",
-                            "log": false,
-                            "lower": 1.0,
-                            "upper": 99.0,
-                            "default": 50.0
-                        },
-                        {
-                            "name": "score_func",
-                            "type": "categorical",
-                            "choices": [
-                                "chi2",
-                                "f_classif",
-                                "mutual_info"
-                            ],
-                            "default": "chi2",
                             "probabilities": null
                         }
                     ],
@@ -898,6 +869,7 @@
                                 "absolute_error",
                                 "poisson",
                                 "quantile",
+                                "gamma",
                                 "squared_error"
                             ],
                             "default": "squared_error",
@@ -954,6 +926,14 @@
                             "lower": 0.01,
                             "upper": 0.4,
                             "default": 0.1
+                        },
+                        {
+                            "name": "quantile",
+                            "type": "uniform_float",
+                            "log": false,
+                            "lower": 0.01,
+                            "upper": 0.99,
+                            "default": 0.5
                         }
                     ],
                     "conditions": [
@@ -971,6 +951,12 @@
                             "parent": "early_stop",
                             "type": "EQ",
                             "value": "valid"
+                        },
+                        {
+                            "child": "quantile",
+                            "parent": "loss",
+                            "type": "EQ",
+                            "value": "quantile"
                         }
                     ],
                     "forbiddens": [],
