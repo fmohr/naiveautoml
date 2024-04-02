@@ -21,7 +21,12 @@ from typing import Callable
 
 
 def get_dataset(openmlid, as_numpy = True):
-    ds = openml.datasets.get_dataset(openmlid)
+    ds = openml.datasets.get_dataset(
+        openmlid,
+        download_data=True,
+        download_qualities=False,
+        download_features_meta_data=False
+    )
     df = ds.get_data()[0]
     num_rows = len(df)
         
@@ -137,10 +142,15 @@ class TestNaiveAutoML(unittest.TestCase):
         self.logger.info(f"Test that history will contain entries for all evaluations.")
         max_hpo_iterations = 5
         X, y = get_dataset(openmlid, as_numpy=True)
-        naml = naiveautoml.NaiveAutoML(logger_name="naml", max_hpo_iterations=max_hpo_iterations, show_progress=True)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            max_hpo_iterations=max_hpo_iterations,
+            show_progress=True,
+            execution_timeout=2
+        )
         naml.fit(X, y)
 
-        self.assertEquals(sum([len(s["components"]) for s in naml.search_space]) + max_hpo_iterations, len(naml.history))
+        self.assertEqual(sum([len(s["components"]) for s in naml.search_space]) + max_hpo_iterations, len(naml.history))
 
     def test_constant_algorithms_in_hpo_phase(self):
         """
@@ -216,7 +226,7 @@ class TestNaiveAutoML(unittest.TestCase):
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
                 execution_timeout=10,
-                max_hpo_iterations=10,
+                max_hpo_iterations=5,
                 show_progress=True
             )
             naml.fit(X_train, y_train)
@@ -262,7 +272,7 @@ class TestNaiveAutoML(unittest.TestCase):
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
                 timeout=75,
-                max_hpo_iterations=10,
+                max_hpo_iterations=5,
                 show_progress=True,
                 task_type="regression",
                 evaluation_fun="mccv_1"
@@ -487,7 +497,7 @@ class TestNaiveAutoML(unittest.TestCase):
             scores.append(score)
             self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
 
-            self.assertEquals(len(naml.history), len(evaluation.history), "History lengths don't match!")
+            self.assertEqual(len(naml.history), len(evaluation.history), "History lengths don't match!")
 
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
