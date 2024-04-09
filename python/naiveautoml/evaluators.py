@@ -9,6 +9,45 @@ from .commons import\
     get_scoring_name, build_scorer
 
 
+class EarlyDiscardingValidator:
+
+    def __init__(self, instance, stopper, train_size=0.8):
+        self.instance = instance
+        self.stopper = stopper
+        self.train_size = train_size
+
+    def __call__(self, pl, X, y, scorings, errors="message"):
+        warnings.filterwarnings('ignore', module='sklearn')
+        warnings.filterwarnings('ignore', module='numpy')
+        try:
+            if not isinstance(scorings, list):
+                scorings = [scorings]
+
+            try:
+
+
+
+            except KeyboardInterrupt:
+                raise
+            except Exception:
+                if errors == "message":
+                    self.instance.logger.info(f"Observed exception in validation of pipeline {pl}.")
+                else:
+                    raise
+            return {
+                s: np.nan for s in scorings
+            }
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            if errors in ["message", "ignore"]:
+                if errors == "message":
+                    self.instance.logger.error(f"Observed an error: {e}")
+                return None
+            else:
+                raise
+
+
 class LccvValidator:
 
     def __init__(self, instance, train_size=0.8):
