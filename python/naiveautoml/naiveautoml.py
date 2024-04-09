@@ -739,7 +739,8 @@ class NaiveAutoML:
             history_keys.append(step + "_hps")
         history_keys.extend(
             [self.scoring] +
-            (self.side_scores if self.side_scores is not None else []) + ["new_best", "evaluation_history", "status", "exception"]
+            (self.side_scores if self.side_scores is not None else []) +
+            ["new_best", "evaluation_history", "status", "exception"]
         )
 
         history_rows = []

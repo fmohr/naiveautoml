@@ -1370,7 +1370,8 @@ class HPOProcess:
 
     def evalComp(self, configs_by_comps):
         try:
-            scores, evaluation_history = self.pool.evaluate(self.get_parametrized_pipeline(configs_by_comps), timeout=self.execution_timeout)
+            scores, evaluation_history = self.pool.evaluate(self.get_parametrized_pipeline(configs_by_comps),
+                                                            timeout=self.execution_timeout)
             return (
                 "ok",
                 scores,
@@ -1379,7 +1380,10 @@ class HPOProcess:
             )
         except pynisher.WallTimeoutException:
             self.logger.info("TIMEOUT")
-            return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, {scoring: {} for scoring in [self.scoring] + self.side_scores}, None
+            return ("timeout",
+                    {scoring: np.nan for scoring in [self.scoring] + self.side_scores},
+                    {scoring: {} for scoring in [self.scoring] + self.side_scores},
+                    None)
         except KeyboardInterrupt:
             raise
         except Exception:
