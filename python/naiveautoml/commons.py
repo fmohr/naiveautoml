@@ -160,9 +160,9 @@ class EvaluationPool:
         self.cache = {}
         self.use_caching = use_caching
 
-    def tellEvaluation(self, pl, scores, timestamp):
+    def tellEvaluation(self, pl, scores, evaluation_history, timestamp):
         spl = str(pl)
-        self.cache[spl] = (spl, scores, timestamp)
+        self.cache[spl] = (spl, scores, evaluation_history, timestamp)
         score = np.mean(scores)
         if score > self.bestScore:
             self.bestScore = score
@@ -225,9 +225,10 @@ class EvaluationPool:
             if self.is_pipeline_forbidden(pl):
                 self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
                 scores = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
+                evaluation_history = {get_scoring_name(scoring): {} for scoring in [self.scoring] + self.side_scores}
                 if hasattr(self.evaluation_fun, "update"):
                     self.evaluation_fun.update(pl, scores)
-                return scores
+                return scores, evaluation_history
 
             process = psutil.Process(os.getpid())
             mem = int(process.memory_info().rss / 1024 / 1024)
@@ -240,13 +241,14 @@ class EvaluationPool:
             if self.use_caching and spl in self.cache:
                 out = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
                 out[get_scoring_name(self.scoring)] = np.round(np.mean(self.cache[spl][1]), 4)
-                return out
+                return out, self.cache[spl][2]
+
             timestamp = time.time()
             if timeout is not None:
                 if timeout > 1:
                     with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
                         if hasattr(self.evaluation_fun, "errors"):
-                            scores = limited_evaluation(
+                            scores, evaluation_history = limited_evaluation(
                                 pl,
                                 self.X,
                                 self.y,
@@ -254,7 +256,7 @@ class EvaluationPool:
                                 errors="ignore"
                             )
                         else:
-                            scores = limited_evaluation(
+                            scores, evaluation_history = limited_evaluation(
                                 pl,
                                 self.X,
                                 self.y,
@@ -263,7 +265,7 @@ class EvaluationPool:
                 else:  # no time left
                     raise pynisher.WallTimeoutException()
             else:
-                scores = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
+                scores, evaluation_history = self.evaluation_fun(pl, self.X, self.y, [self.scoring] + self.side_scores)
 
             # here we give the evaluator the chance to update itself
             # this looks funny, but it is done because the evaluation could have been done with a copy of the evaluator
@@ -272,7 +274,8 @@ class EvaluationPool:
 
             # if no score was observed, return results here
             if scores is None:
-                return {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
+                return ({get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores},
+                        {get_scoring_name(scoring): {} for scoring in [self.scoring] + self.side_scores})
             runtime = time.time() - start_outer
 
             if not isinstance(scores, dict):
@@ -283,8 +286,8 @@ class EvaluationPool:
                                 )
 
             self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
-            self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], timestamp)
-            return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}
+            self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], evaluation_history, timestamp)
+            return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}, evaluation_history
 
         # if there was an exception, then tell the evaluator function about a nan
         except Exception:
@@ -1367,20 +1370,23 @@ class HPOProcess:
 
     def evalComp(self, configs_by_comps):
         try:
+            scores, evaluation_history = self.pool.evaluate(self.get_parametrized_pipeline(configs_by_comps), timeout=self.execution_timeout)
             return (
                 "ok",
-                self.pool.evaluate(self.get_parametrized_pipeline(configs_by_comps), timeout=self.execution_timeout),
+                scores,
+                evaluation_history,
                 None
             )
         except pynisher.WallTimeoutException:
             self.logger.info("TIMEOUT")
-            return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, None
+            return "timeout", {scoring: np.nan for scoring in [self.scoring] + self.side_scores}, {scoring: {} for scoring in [self.scoring] + self.side_scores}, None
         except KeyboardInterrupt:
             raise
         except Exception:
             return (
                 "exception",
                 {scoring: np.nan for scoring in [self.scoring] + self.side_scores},
+                {scoring: {} for scoring in [self.scoring] + self.side_scores},
                 traceback.format_exc()
             )
 
@@ -1406,7 +1412,7 @@ class HPOProcess:
 
         # evaluate configured pipeline
         time_start_eval = time.time()
-        status, scores, exception = self.evalComp(configs_by_comps)
+        status, scores, evaluation_history, exception = self.evalComp(configs_by_comps)
         if not isinstance(scores, dict):
             raise TypeError(f"""
 The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}
@@ -1456,7 +1462,7 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                 configs = get_all_configurations(self.config_spaces)
                 self.logger.info(f"Now evaluation all {len(configs)} possible configurations.")
                 for configs_by_comps in configs:
-                    status, scores, exception = self.evalComp(configs_by_comps)
+                    status, scores, evaluation_history, exception = self.evalComp(configs_by_comps)
                     score = scores[self.scoring]
                     self.logger.info(f"Observed score of {score} for params {configs_by_comps}")
                     if score > self.best_score:
@@ -1464,7 +1470,7 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                         self.best_score = score
                         self.best_configs = configs_by_comps
                 self.logger.info("Configuration space completely exhausted.")
-        return self.get_parametrized_pipeline(configs_by_comps), status, scores, runtime, exception
+        return self.get_parametrized_pipeline(configs_by_comps), status, scores, evaluation_history, runtime, exception
 
     def get_best_config(self, step_name):
         return self.best_configs[step_name]
