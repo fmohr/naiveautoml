@@ -15,11 +15,10 @@ class Stopper(abc.ABC):
     def __init__(self, max_steps: int) -> None:
         assert max_steps > 0
         self.max_steps = max_steps
-        self.context = []
 
         # Initialize list to collect observations
-        self.observed_budgets = []
-        self.observed_objectives = []
+        self.observed_budgets = {}
+        self.observed_objectives = {}
 
         self._stop_was_called = False
 
@@ -45,29 +44,34 @@ class Stopper(abc.ABC):
         #     objective = max(prev_objective, objective)
         return objective
 
-    @property
-    def step(self):
-        """Last observed step."""
-        return self.observed_budgets[-1] if len(self.observed_budgets) > 0 else 0
 
-    def observe(self, budget: float, objective: float) -> None:
+    def get_highest_budget(self, subject):
+        """Last observed step."""
+        return self.observed_budgets[subject][-1] if subject in self.observed_budgets and len(self.observed_budgets[subject]) > 0 else 0
+
+    def observe(self, subject, budget: float, objective: float) -> None:
         """Observe a new objective value.
 
         Args:
+            subject (Any): something hashable to identify what the budget and objective is for
             budget (float): the budget used to obtain the objective (e.g., the number of epochs).
             objective (float): the objective value to observe (e.g, the accuracy).
         """
         objective = self.transform_objective(objective)
 
-        self.observed_budgets.append(budget)
-        self.observed_objectives.append(objective)
+        if subject not in self.observed_budgets:
+            self.observed_budgets[subject] = []
+            self.observed_objectives[subject] = []
+
+        self.observed_budgets[subject].append(budget)
+        self.observed_objectives[subject].append(objective)
 
         # memorize best objective
         if objective > self._best_objective:
             self._best_objective = objective
             self._best_budget = budget
 
-    def stop(self) -> bool:
+    def stop(self, subject) -> bool:
         """Returns ``True`` if the evaluation should be stopped and ``False`` otherwise.
 
         Returns:
@@ -76,18 +80,22 @@ class Stopper(abc.ABC):
         if not self._stop_was_called:
             self._stop_was_called = True
 
-        if self.step >= self.max_steps:
+        if self.get_highest_budget(subject) >= self.max_steps:
             return True
 
         return False
 
-    @property
-    def observations(self) -> list:
+    def get_observations(self, subject) -> list:
         """Returns a copy of the list of observations with 0-index the budgets and 1-index the objectives."""
-        obs = [self.observed_budgets, self.observed_objectives]
+        obs = [self.observed_budgets[subject], self.observed_objectives[subject]]
         return copy.deepcopy(obs)
 
-    @property
-    def objective(self):
+    def get_objective(self, subject):
         """Last observed objective."""
-        return self.observations[-1][-1] if len(self.observations) > 0 and len(self.observations[0]) > 0 else None
+
+        if subject not in self.observed_objectives.keys():
+            return None
+
+        observations = self.observed_objectives[subject]
+
+        return observations[-1][-1] if len(observations) > 0 and len(observations[0]) > 0 else None

@@ -570,7 +570,7 @@ class TestNaiveAutoML(unittest.TestCase):
                             self.logger.warning(f"Observed uncommon status \"{status}\".")
 
     def test_early_discarding(self):
-        
+
         openmlid = 61
 
         X, y = get_dataset(openmlid)

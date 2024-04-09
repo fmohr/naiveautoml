@@ -482,6 +482,7 @@ class LCModelStopper(Stopper):
                 :return:
                 """
         return self.best_objective
+        """
         objectives = []
 
         for arr in self.context:
@@ -492,10 +493,11 @@ class LCModelStopper(Stopper):
         if len(objectives) > 0:
             return np.max(objectives)
         else:
-            if len(self.observations[1]) > 0:
+            if len(self.get_observations[1]) > 0:
                 return np.max(self.observations[1])
             else:
                 return 0
+        """
 
     def _get_competiting_objectives(self, rung) -> list:
         values = []
@@ -508,31 +510,29 @@ class LCModelStopper(Stopper):
         values = [v for v in values if isinstance(v, Number)]
         return values
 
-    def observe(self, budget: float, objective: float):
+    def observe(self, subject, budget: float, objective: float):
         super().observe(
+            subject=subject,
             budget=budget,
             objective=objective
         )
-        self._budget = self.observed_budgets[-1]
-        self._lc_objectives.append(self.objective)
+        self._budget = self.observed_budgets[subject][-1]
+        self._lc_objectives.append(self.get_objective(subject))
         self._objective = self._lc_objectives[-1]
 
-    def stop(self) -> bool:
+    def stop(self, subject) -> bool:
+
         # Enforce Pre-conditions Before Learning-Curve based Early Discarding
-        if super().stop():
+        if super().stop(subject):
             self.infos_stopped = "max steps reached"
-            self.context.append(self.observations)
-            self.observed_budgets = []
-            self.observed_objectives = []
-            self._stop_was_called = False
             return True
 
         if self._best_budget is not None and self.step - self._best_budget >= self.early_stopping_patience:
             self.infos_stopped = "early stopping"
-            self.context.append(self.observations)
-            self.observed_budgets = []
-            self.observed_objectives = []
-            self._stop_was_called = False
+            #self.context.append(self.observations)
+            #self.observed_budgets = []
+            #self.observed_objectives = []
+            #self._stop_was_called = False
             return True
 
         # This condition will enforce the stopper to stop the evaluation at the first step
@@ -566,7 +566,6 @@ class LCModelStopper(Stopper):
                         < q1 - self.iqr_factor_for_outlier_detection * iqr
                     ):
                         self.infos_stopped = "outlier"
-                        self.context.append(self.observations)
                         self.observed_budgets = []
                         self.observed_objectives = []
                         self._stop_was_called = False
@@ -600,20 +599,20 @@ class LCModelStopper(Stopper):
             self._rung += 1
         else:
             self.infos_stopped = f"prob={p:.3f}"
-            self.context.append(self.observations)
-            self.observed_budgets = []
-            self.observed_objectives = []
+            #self.context.append(self.observations)
+            #self.observed_budgets = []
+            #self.observed_objectives = []
             self._stop_was_called = False
             return True
 
-    @property
-    def objective(self):
+    def get_objective(self, subject):
+        observations = self.get_observations(subject=subject)
         if self.objective_returned == "last":
-            return self.observations[-1][-1]
+            return observations[-1][-1]
         elif self.objective_returned == "max":
-            return max(self.observations[-1])
+            return max(observations[-1])
         elif self.objective_returned == "alc":
-            z, y = self.observations
+            z, y = observations
             return area_learning_curve(z, y, z_max=self.max_steps)
         else:
             raise ValueError("objective_returned must be one of 'last', 'best', 'alc'")

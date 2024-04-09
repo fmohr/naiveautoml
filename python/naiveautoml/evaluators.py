@@ -36,6 +36,9 @@ class EarlyDiscardingValidator:
         self.max_anchor = int(train_size * instance.X.shape[0])
         self.scorings = [instance.scoring] + instance.side_scores
 
+    def get_subject(self, pl):
+        return str(pl)
+
     def __call__(self, pl, X, y, scorings, errors="message"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
@@ -52,6 +55,7 @@ class EarlyDiscardingValidator:
                 schedule.append(self.max_anchor)
 
         # prepare scoring functions
+        subject = self.get_subject(pl)
         scores = None
         try:
             if not isinstance(scorings, list):
@@ -61,7 +65,7 @@ class EarlyDiscardingValidator:
 
             for budget in schedule:
 
-                if self.stopper.stop():
+                if self.stopper.stop(subject=subject):
                     print("Stopper says we should stop!")
                     break
 
@@ -81,6 +85,7 @@ class EarlyDiscardingValidator:
                         )
 
                 self.stopper.observe(
+                    subject=subject,
                     budget=budget,
                     objective=np.mean(scores[base_scoring])
                 )
@@ -105,6 +110,7 @@ class EarlyDiscardingValidator:
 
     def update(self, pl, score):
         self.stopper.observe(
+            subject=self.get_subject(pl),
             budget=self.max_anchor,
             objective=score[self.instance.scoring]
         )
