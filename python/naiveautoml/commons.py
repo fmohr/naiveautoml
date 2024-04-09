@@ -78,9 +78,12 @@ def build_scorer(scoring):
 def get_evaluation_fun(instance, evaluation_fun):
 
     from .evaluators import\
-        LccvValidator, KFold, Mccv
+        LccvValidator, KFold, Mccv, EarlyDiscardingValidator
 
     is_small_dataset = instance.X.shape[0] < 2000
+
+    # always use early discarding during tests
+    return EarlyDiscardingValidator(instance)
 
     if evaluation_fun is None:
         if is_small_dataset:

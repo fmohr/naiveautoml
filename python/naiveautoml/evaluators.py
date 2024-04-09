@@ -4,6 +4,8 @@ from lccv import lccv
 import numpy as np
 import pandas as pd
 import sklearn
+from sklearn.model_selection import StratifiedShuffleSplit
+from .stoppers._lcmodel_stopper import LCModelStopper
 
 from .commons import\
     get_scoring_name, build_scorer
@@ -11,56 +13,101 @@ from .commons import\
 
 class EarlyDiscardingValidator:
 
-    def __init__(self, instance, stopper, train_size=0.8):
+    def __init__(
+            self,
+            instance,
+            stopper="lce",
+            train_size=0.8,
+            repetitions_per_anchor=5,
+    ):
         self.instance = instance
-        self.stopper = stopper
-        self.train_size = train_size
+
+        if isinstance(stopper, str):
+            accepted_stoppers = ["lce", "pfn"]
+            if stopper not in accepted_stoppers:
+                raise ValueError(f"'stopper' must be in {accepted_stoppers} but is {stopper}")
+            self.stopper = LCModelStopper(
+                max_steps=10**3  # not sure why this is being used
+            )
+        else:
+            self.stopper = stopper
+        self.repetitions_per_anchor = repetitions_per_anchor
+
+        self.max_anchor = int(train_size * instance.X.shape[0])
+        self.scorings = [instance.scoring] + instance.side_scores
 
     def __call__(self, pl, X, y, scorings, errors="message"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
+
+        # configure schedule
+        if self.stopper.best_objective == -np.inf:
+            schedule = [self.max_anchor]
+        else:
+            base = np.sqrt(2)
+            min_exp = 8
+            max_exp = int(np.log(self.max_anchor) / np.log(base))
+            schedule = [int(base**i) for i in range(min_exp, max_exp + 1)]
+            if self.max_anchor not in schedule:
+                schedule.append(self.max_anchor)
+
+        # prepare scoring functions
+        scores = None
         try:
             if not isinstance(scorings, list):
                 scorings = [scorings]
+            base_scoring = scorings[0]
+            scorers = [build_scorer(scoring) for scoring in scorings]
 
-            try:
+            for budget in schedule:
 
-                results = []
-                m=0
-                i = 4**2
-                while(not stopper.stop()):
-                    if i>len(X)*0.8:
-                        scores = cross_val_score(knn, X, y)
-                    else:
-                        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=i)
-                        scores = cross_val_score(knn, X_train, y_train)
-                    print(stopper.observations)
-                    average = scores.mean()
-                    results.append(average)# Simulation of iteration
-                    stopper.observe(budget=i, objective=average)
-                    print(stopper._retrieve_best_objective())
-                    i = stopper._compute_halting_step()
-                anchors
+                if self.stopper.stop():
+                    print("Stopper says we should stop!")
+                    break
 
-            except KeyboardInterrupt:
-                raise
-            except Exception:
-                if errors == "message":
-                    self.instance.logger.info(f"Observed exception in validation of pipeline {pl}.")
-                else:
-                    raise
-            return {
-                s: np.nan for s in scorings
-            }
+                scores = {
+                    s_name: [] for s_name in scorings
+                }
+
+                sss = StratifiedShuffleSplit(n_splits=self.repetitions_per_anchor, train_size=budget)
+                for train_index, val_index in sss.split(X, y):
+                    pl_copy = sklearn.base.clone(pl)
+                    pl_copy.fit(X[train_index], y[train_index])
+
+                    # compute scores
+                    for s_name, s_fun in zip(scorings, scorers):
+                        scores[s_name].append(
+                            s_fun(pl_copy, X[val_index], y[val_index])
+                        )
+
+                self.stopper.observe(
+                    budget=budget,
+                    objective=np.mean(scores[base_scoring])
+                )
+
         except KeyboardInterrupt:
             raise
         except Exception as e:
             if errors in ["message", "ignore"]:
                 if errors == "message":
                     self.instance.logger.error(f"Observed an error: {e}")
-                return None
+                    self.instance.logger.exception(e)
+                return {
+                    s: np.nan for s in scorings
+                }
             else:
                 raise
+
+        if scores is None or budget != self.max_anchor:
+            print(f"Returning nan at budget {budget}")
+            return {s: np.nan for s in self.scorings}
+        return {s: e[-1] for s, e in scores.items()}
+
+    def update(self, pl, score):
+        self.stopper.observe(
+            budget=self.max_anchor,
+            objective=score[self.instance.scoring]
+        )
 
 
 class LccvValidator:

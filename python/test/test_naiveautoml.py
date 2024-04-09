@@ -568,3 +568,26 @@ class TestNaiveAutoML(unittest.TestCase):
 
                         if status not in ["ok", "timeout"]:
                             self.logger.warning(f"Observed uncommon status \"{status}\".")
+
+    def test_early_discarding(self):
+        
+        openmlid = 61
+
+        X, y = get_dataset(openmlid)
+        self.logger.info(
+            f"Testing early discarding evaluation on dataset {openmlid}. "
+        )
+
+        # run naml
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            max_hpo_iterations=10,
+            show_progress=True,
+            raise_errors=True
+        )
+        naml.fit(X, y)
+
+        # compute test performance
+        self.logger.info(
+            f"finished test on early discarding."
+        )

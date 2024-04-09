@@ -2,6 +2,7 @@ import abc
 import copy
 
 from numbers import Number
+import numpy as np
 
 
 class Stopper(abc.ABC):
@@ -22,6 +23,13 @@ class Stopper(abc.ABC):
 
         self._stop_was_called = False
 
+        self._best_objective = -np.inf
+        self._best_budget = None
+
+    @property
+    def best_objective(self):
+        return self._best_objective
+
     def to_json(self):
         """Returns a dict version of the stopper which can be saved as JSON."""
         json_format = type(self).__name__
@@ -40,7 +48,7 @@ class Stopper(abc.ABC):
     @property
     def step(self):
         """Last observed step."""
-        return self.observed_budgets[-1]
+        return self.observed_budgets[-1] if len(self.observed_budgets) > 0 else 0
 
     def observe(self, budget: float, objective: float) -> None:
         """Observe a new objective value.
@@ -54,21 +62,21 @@ class Stopper(abc.ABC):
         self.observed_budgets.append(budget)
         self.observed_objectives.append(objective)
 
+        # memorize best objective
+        if objective > self._best_objective:
+            self._best_objective = objective
+            self._best_budget = budget
+
     def stop(self) -> bool:
         """Returns ``True`` if the evaluation should be stopped and ``False`` otherwise.
 
         Returns:
             bool: ``(step >= max_steps)``.
         """
-        if not (self._stop_was_called):
+        if not self._stop_was_called:
             self._stop_was_called = True
-            self.observe(0, False)
-
-        if not (isinstance(self.observations[-1][-1], Number)):
-            return True
 
         if self.step >= self.max_steps:
-            self.observe(0, True)
             return True
 
         return False
@@ -82,4 +90,4 @@ class Stopper(abc.ABC):
     @property
     def objective(self):
         """Last observed objective."""
-        return self.observations[-1][-1]
+        return self.observations[-1][-1] if len(self.observations) > 0 and len(self.observations[0]) > 0 else None

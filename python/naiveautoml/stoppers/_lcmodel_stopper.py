@@ -477,6 +477,11 @@ class LCModelStopper(Stopper):
         return (self.min_steps - 1) * self._reduction_factor**self._rung
 
     def _retrieve_best_objective(self) -> float:
+        """
+                    should become deprecated I guess
+                :return:
+                """
+        return self.best_objective
         objectives = []
 
         for arr in self.context:
@@ -504,18 +509,13 @@ class LCModelStopper(Stopper):
         return values
 
     def observe(self, budget: float, objective: float):
-        super().observe(budget, objective)
+        super().observe(
+            budget=budget,
+            objective=objective
+        )
         self._budget = self.observed_budgets[-1]
         self._lc_objectives.append(self.objective)
         self._objective = self._lc_objectives[-1]
-
-        # For Early-Stopping based on Patience
-        if (
-            not (hasattr(self, "_local_best_objective"))
-            or self._objective > self._local_best_objective
-        ):
-            self._local_best_objective = self._objective
-            self._local_best_step = self.step
 
     def stop(self) -> bool:
         # Enforce Pre-conditions Before Learning-Curve based Early Discarding
@@ -527,7 +527,7 @@ class LCModelStopper(Stopper):
             self._stop_was_called = False
             return True
 
-        if self.step - self._local_best_step >= self.early_stopping_patience:
+        if self._best_budget is not None and self.step - self._best_budget >= self.early_stopping_patience:
             self.infos_stopped = "early stopping"
             self.context.append(self.observations)
             self.observed_budgets = []
@@ -538,7 +538,7 @@ class LCModelStopper(Stopper):
         # This condition will enforce the stopper to stop the evaluation at the first step
         # for the first evaluation (The FABOLAS method does the same, bias the first samples with
         # small budgets)
-        self.best_objective = self._retrieve_best_objective()
+#        self.best_objective = self._retrieve_best_objective()
 
         halting_step = self._compute_halting_step()
 
@@ -587,6 +587,7 @@ class LCModelStopper(Stopper):
         z_train = self.observed_budgets
         y_train = self._lc_objectives
         z_train, y_train = np.asarray(z_train), np.asarray(y_train)
+        print(z_train, y_train)
         self.lc_model.fit(z_train, y_train, update_prior=True)
 
         # Check if the configuration is promotable based on its predicted objective value
