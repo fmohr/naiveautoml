@@ -1371,7 +1371,7 @@ class HPOProcess:
     def evalComp(self, configs_by_comps):
         try:
             scores, evaluation_report = self.pool.evaluate(self.get_parametrized_pipeline(configs_by_comps),
-                                                            timeout=self.execution_timeout)
+                                                           timeout=self.execution_timeout)
             return (
                 "ok",
                 scores,
