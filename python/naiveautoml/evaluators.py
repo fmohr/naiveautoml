@@ -25,7 +25,22 @@ class EarlyDiscardingValidator:
 
             try:
 
-
+                results = []
+                m=0
+                i = 4**2
+                while(not stopper.stop()):
+                    if i>len(X)*0.8:
+                        scores = cross_val_score(knn, X, y)
+                    else:
+                        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=i)
+                        scores = cross_val_score(knn, X_train, y_train)
+                    print(stopper.observations)
+                    average = scores.mean()
+                    results.append(average)# Simulation of iteration
+                    stopper.observe(budget=i, objective=average)
+                    print(stopper._retrieve_best_objective())
+                    i = stopper._compute_halting_step()
+                anchors
 
             except KeyboardInterrupt:
                 raise
