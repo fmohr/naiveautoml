@@ -574,3 +574,16 @@ class TestNaiveAutoML(unittest.TestCase):
 
                         if status not in ["ok", "timeout"]:
                             self.logger.warning(f"Observed uncommon status \"{status}\".")
+
+    @parameterized.expand([
+        (61, )
+    ])
+    def test_process_leak(self, openmlid):
+        X, y = get_dataset(openmlid)
+        self.logger.info(f"Start test of individual stateful evaluation function on dataset {openmlid}.")
+
+        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=0.8)
+        for i in range(1, 21):
+            self.logger.info(f"Run {i}-th instance")
+            automl = naiveautoml.NaiveAutoML(evaluation_fun="mccv_1", show_progress=True)
+            automl.fit(X_train, y_train)
