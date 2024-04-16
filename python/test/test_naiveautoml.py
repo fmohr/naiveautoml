@@ -396,7 +396,10 @@ class TestNaiveAutoML(unittest.TestCase):
         )
         
         def evaluation(pl, X, y, scoring_functions):
-            return {s: np.mean(sklearn.model_selection.cross_validate(pl, X, y, scoring=s)["test_score"]) for s in scoring_functions}
+            return (
+                {s: np.mean(sklearn.model_selection.cross_validate(pl, X, y, scoring=s)["test_score"]) for s in scoring_functions},
+                {s: {} for s in scoring_functions}
+                )
         
         scorer = sklearn.metrics.get_scorer("accuracy")
         
@@ -462,7 +465,10 @@ class TestNaiveAutoML(unittest.TestCase):
                     s: np.mean(sklearn.model_selection.cross_validate(pl, X, y, scoring=s)["test_score"])
                     for s in scoring_functions
                 }
-                return results
+                evaluation_report = {
+                    s: {} for s in scoring_functions
+                }
+                return results, evaluation_report
 
             def update(self, pl, results):
                 self.history.append([pl, results])
@@ -551,7 +557,7 @@ class TestNaiveAutoML(unittest.TestCase):
 
                     # create and evaluate random configurations
                     for _ in range(10):
-                        pl, status, scores, runtime, exception = hpo_process.step()
+                        pl, status, scores, evaluation_report, runtime, exception = hpo_process.step()
                         self.assertFalse(
                             np.isnan(scores[scoring]) and status == "ok",
                             "Observed nan score even though status is ok"
@@ -568,3 +574,20 @@ class TestNaiveAutoML(unittest.TestCase):
 
                         if status not in ["ok", "timeout"]:
                             self.logger.warning(f"Observed uncommon status \"{status}\".")
+
+    @parameterized.expand([
+        (61, )
+    ])
+    def test_process_leak(self, openmlid):
+        X, y = get_dataset(openmlid)
+        self.logger.info(f"Start test of individual stateful evaluation function on dataset {openmlid}.")
+
+        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=0.8)
+        for i in range(1, 21):
+            self.logger.info(f"Run {i}-th instance")
+            automl = naiveautoml.NaiveAutoML(
+                evaluation_fun="mccv_1",
+                show_progress=True,
+                timeout=30
+            )
+            automl.fit(X_train, y_train)
