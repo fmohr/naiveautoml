@@ -131,7 +131,7 @@ class LccvValidator:
                 scorings = [scorings]
 
             try:
-                score, _, _, elcm = lccv(
+                score, score_est, elc, elcm = lccv(
                     pl,
                     X,
                     y,
@@ -148,9 +148,12 @@ class LccvValidator:
                 results = {
                     s: results_at_highest_anchor[f"score_test_{s}"] if not np.isnan(score) else np.nan for s in scorings
                 }
+                evaluation_history = {
+                    s: elc if not np.isnan(score) else np.nan for s in scorings
+                }
 
                 # return the object itself, so that it can be overwritten in the pool (necessary because of pynisher)
-                return results, self
+                return results, evaluation_history
             except KeyboardInterrupt:
                 raise
             except Exception:
@@ -158,16 +161,14 @@ class LccvValidator:
                     self.instance.logger.info(f"Observed exception in validation of pipeline {pl}.")
                 else:
                     raise
-            return {
-                s: np.nan for s in scorings
-            }
+            return {s: np.nan for s in scorings}, {s: {} for s in scorings}
         except KeyboardInterrupt:
             raise
         except Exception as e:
             if errors in ["message", "ignore"]:
                 if errors == "message":
                     self.instance.logger.error(f"Observed an error: {e}")
-                return None
+                return None, None
             else:
                 raise
 
@@ -193,6 +194,7 @@ class KFold:
             elif self.instance.task_type:
                 splitter = sklearn.model_selection.KFold(n_splits=self.n_splits, random_state=None, shuffle=True)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
+            evaluation_history = {get_scoring_name(scoring): {} for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
                 X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
@@ -219,14 +221,14 @@ class KFold:
                             raise
 
                     scores[get_scoring_name(scoring)].append(score)
-            return scores
+            return scores, evaluation_history
         except KeyboardInterrupt:
             raise
         except Exception as e:
             if errors in ["message", "ignore"]:
                 if errors == "message":
                     self.instance.logger.error(f"Observed an error: {e}")
-                return None
+                return None, None
             else:
                 raise
 
@@ -256,6 +258,7 @@ class Mccv:
                     random_state=None
                 )
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
+            evaluation_history = {get_scoring_name(scoring): {} for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
                 X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
@@ -282,13 +285,13 @@ class Mccv:
                             raise
 
                     scores[get_scoring_name(scoring)].append(score)
-            return scores
+            return scores, evaluation_history
         except KeyboardInterrupt:
             raise
         except Exception as e:
             if errors in ["message", "ignore"]:
                 if errors == "message":
                     self.instance.logger.error(f"Observed an error: {e}")
-                return None
+                return None, None
             else:
                 raise

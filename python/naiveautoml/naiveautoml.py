@@ -330,12 +330,13 @@ class NaiveAutoML:
                 exception = None
                 timeout = False
                 status = "ok"
+                eval_start_time = time.time()
                 try:
                     if self.execution_timeout is None:
                         timeout = None
                     else:
                         timeout = min(self.execution_timeout, remaining_time if self.deadline is not None else 10**10)
-                    scores = pool.evaluate(pl, timeout)
+                    scores, evaluation_report = pool.evaluate(pl, timeout)
                 except KeyboardInterrupt:
                     raise
                 except pynisher.WallTimeoutException:
@@ -352,9 +353,15 @@ class NaiveAutoML:
                             "Observed exception during the evaluation. "
                             f"The trace is as follows:\n{exception}"
                         )
+                runtime = time.time() - eval_start_time
                 if status != "ok":
                     scores = {
                         scoring: np.nan for scoring in
+                        [self.scoring] +
+                        (self.side_scores if self.side_scores is not None else [])
+                    }
+                    evaluation_report = {
+                        scoring: {} for scoring in
                         [self.scoring] +
                         (self.side_scores if self.side_scores is not None else [])
                     }
@@ -366,10 +373,12 @@ class NaiveAutoML:
                 # update history
                 self.history.append({
                     "time": time.time() - self.start_time,
+                    "runtime": runtime,
                     "pl": self.get_pipeline_descriptor(pl),
                     "score_internal": score,
                     "scores": scores,
                     "new_best": score > self.best_score_overall,
+                    "evaluation_report": evaluation_report,
                     "status": status,
                     "exception": exception
                 })
@@ -482,16 +491,18 @@ class NaiveAutoML:
             try:
                 res = self.hpo_process.step(remaining_time)
                 if res is not None:
-                    pl, status, scores, runtime, exception = res
+                    pl, status, scores, evaluation_report, runtime, exception = res
                     score = scores[get_scoring_name(self.scoring)]
                     if score > self.best_score_overall:
                         self.best_score_overall = score
                     self.history.append({
                         "time": time.time() - self.start_time,
+                        "runtime": runtime,
                         "pl": self.get_pipeline_descriptor(pl),
                         "score_internal": score,
                         "scores": scores,
                         "new_best": score > self.best_score_overall,
+                        "evaluation_report": evaluation_report,
                         "status": status,
                         "exception": exception}
                     )
@@ -722,22 +733,23 @@ class NaiveAutoML:
         self.end_time = time.time()
 
         # compile history
-        history_keys = ["time"]
+        history_keys = ["time", "runtime"]
         for step in self.opt_ordering:
             history_keys.append(step + "_class")
             history_keys.append(step + "_hps")
         history_keys.extend(
             [self.scoring] +
-            (self.side_scores if self.side_scores is not None else []) + ["new_best", "status", "exception"]
+            (self.side_scores if self.side_scores is not None else []) +
+            ["new_best", "evaluation_report", "status", "exception"]
         )
 
         history_rows = []
         for row in self.history:
-            row_formatted = [row["time"]] + row["pl"] + [row["score_internal"]]
+            row_formatted = [row["time"]] + [row["runtime"]] + row["pl"] + [row["score_internal"]]
             if self.side_scores is not None:
                 for s in self.side_scores:
                     row_formatted.append(row["scores"][s])
-            row_formatted.extend([row["new_best"], row["status"], row["exception"]])
+            row_formatted.extend([row["new_best"], row["evaluation_report"], row["status"], row["exception"]])
             history_rows.append(row_formatted)
         self.history = pd.DataFrame(history_rows, columns=history_keys)
         self.logger.info(f"Runtime was {self.end_time - self.start_time} seconds")
@@ -746,7 +758,8 @@ class NaiveAutoML:
         pool = self.get_evaluation_pool(X, y)
         scores = []
         for entry in self.history:
-            scores.append(pool.evaluate(entry["pl"]))
+            s, evaluation_report = pool.evaluate(entry["pl"])
+            scores.append(s)
         return scores
 
     def predict(self, X):
