@@ -12,7 +12,7 @@ class Stopper(abc.ABC):
         max_steps (int): the maximum number of calls to ``observe(budget, objective)``.
     """
 
-    def __init__(self, max_steps: int) -> None:
+    def __init__(self, max_steps: int = np.inf) -> None:
         assert max_steps > 0
         self.max_steps = max_steps
 

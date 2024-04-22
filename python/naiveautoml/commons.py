@@ -82,9 +82,6 @@ def get_evaluation_fun(instance, evaluation_fun):
 
     is_small_dataset = instance.X.shape[0] < 2000
 
-    # always use early discarding during tests
-    return EarlyDiscardingValidator(instance)
-
     if evaluation_fun is None:
         if is_small_dataset:
             instance.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
@@ -107,8 +104,8 @@ def get_evaluation_fun(instance, evaluation_fun):
         return Mccv(instance, n_splits=3)
     elif evaluation_fun == "mccv_5":
         return Mccv(instance, n_splits=5)
-    else:
-        return evaluation_fun
+    elif evaluation_fun == "lce":
+        return EarlyDiscardingValidator(instance)
 
 
 class EvaluationPool:

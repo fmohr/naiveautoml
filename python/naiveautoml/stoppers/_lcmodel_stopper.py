@@ -476,29 +476,6 @@ class LCModelStopper(Stopper):
     def _compute_halting_step(self):
         return (self.min_steps - 1) * self._reduction_factor**self._rung
 
-    def _retrieve_best_objective(self) -> float:
-        """
-                    should become deprecated I guess
-                :return:
-                """
-        return self.best_objective
-        """
-        objectives = []
-
-        for arr in self.context:
-                obj = arr[1]
-                if isinstance(obj, Number):
-                    objectives.extend(obj)
-
-        if len(objectives) > 0:
-            return np.max(objectives)
-        else:
-            if len(self.get_observations[1]) > 0:
-                return np.max(self.observations[1])
-            else:
-                return 0
-        """
-
     def _get_competiting_objectives(self, rung) -> list:
         values = []
         for arr in self.context:
