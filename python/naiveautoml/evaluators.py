@@ -171,6 +171,9 @@ class LccvValidator:
                 return None, None
             else:
                 raise
+    
+    def update(self, pl, scores):
+        self.r = max([scores[s] for s in scores])
 
 
 class KFold:
