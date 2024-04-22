@@ -97,16 +97,15 @@ class EarlyDiscardingValidator:
                 if errors == "message":
                     self.instance.logger.error(f"Observed an error: {e}")
                     self.instance.logger.exception(e)
-                return {
-                    s: np.nan for s in scorings
-                }
+                return ({s: np.nan for s in scorings}, {s: {} for s in scorings})
             else:
                 raise
 
         if scores is None or budget != self.max_anchor:
             print(f"Returning nan at budget {budget}")
-            return {s: np.nan for s in self.scorings}
-        return {s: e[-1] for s, e in scores.items()}
+            return {s: np.nan for s in self.scorings}, {s: {} for s in scorings}
+        print(str(pl))
+        return {s: e[-1] for s, e in scores.items()}, {s: {} for s in scorings}
 
     def update(self, pl, score):
         self.stopper.observe(

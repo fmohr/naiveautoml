@@ -478,13 +478,9 @@ class LCModelStopper(Stopper):
 
     def _get_competiting_objectives(self, rung) -> list:
         values = []
-        for arr in self.context:
-            if (len(arr[1])>=rung):
-                obj = arr[1][rung]
-                if isinstance(obj, Number):
-                    values.append(obj)
-        # Filter out non numerical values (e.g., "F" for failed jobs)
-        values = [v for v in values if isinstance(v, Number)]
+        for subject in self.observed_objectives:
+            if len(self.observed_objectives[subject]) > rung:
+                values.append(self.observed_objectives[subject][rung])
         return values
 
     def observe(self, subject, budget: float, objective: float):
@@ -504,7 +500,7 @@ class LCModelStopper(Stopper):
             self.infos_stopped = "max steps reached"
             return True
 
-        if self._best_budget is not None and self.step - self._best_budget >= self.early_stopping_patience:
+        if self.get_current_step(subject) - self._best_step >= self.early_stopping_patience:
             self.infos_stopped = "early stopping"
             #self.context.append(self.observations)
             #self.observed_budgets = []
@@ -519,13 +515,13 @@ class LCModelStopper(Stopper):
 
         halting_step = self._compute_halting_step()
 
-        if self.step < self.min_steps:
-            if self.step >= halting_step:
+        if self.get_current_step(subject) < self.min_steps:
+            if self.get_current_step(subject) >= halting_step:
                 self._rung += 1
             return False
 
-        if self.step < self._min_obs_to_fit_lc_model:
-            if self.step >= halting_step:
+        if self.get_current_step(subject) < self._min_obs_to_fit_lc_model:
+            if self.get_current_step(subject) >= halting_step:
                 competing_objectives = self._get_competiting_objectives(self._rung)
                 if len(competing_objectives) > self.min_done_for_outlier_detection:
                     q1 = np.quantile(
@@ -552,18 +548,16 @@ class LCModelStopper(Stopper):
             return False
 
         # Check if the halting budget condition is met
-        if self.step < halting_step:
+        if self.get_current_step(subject) < halting_step:
             return False
 
         # Check if the evaluation should be stopped based on LC-Model
 
         # Fit and predict the performance of the learning curve model
         self._refresh_lc_model()
-
-        z_train = self.observed_budgets
-        y_train = self._lc_objectives
+        z_train = self.observed_budgets[subject]
+        y_train = self.observed_objectives[subject]
         z_train, y_train = np.asarray(z_train), np.asarray(y_train)
-        print(z_train, y_train)
         self.lc_model.fit(z_train, y_train, update_prior=True)
 
         # Check if the configuration is promotable based on its predicted objective value

@@ -24,6 +24,7 @@ class Stopper(abc.ABC):
 
         self._best_objective = -np.inf
         self._best_budget = None
+        self._best_step = 0
 
     @property
     def best_objective(self):
@@ -48,6 +49,9 @@ class Stopper(abc.ABC):
     def get_highest_budget(self, subject):
         """Last observed step."""
         return self.observed_budgets[subject][-1] if subject in self.observed_budgets and len(self.observed_budgets[subject]) > 0 else 0
+    
+    def get_current_step(self, subject):
+        return len(self.observed_budgets[subject]) if subject in self.observed_budgets else 0
 
     def observe(self, subject, budget: float, objective: float) -> None:
         """Observe a new objective value.
@@ -70,6 +74,7 @@ class Stopper(abc.ABC):
         if objective > self._best_objective:
             self._best_objective = objective
             self._best_budget = budget
+            self._best_step = self.get_current_step(subject)
 
     def stop(self, subject) -> bool:
         """Returns ``True`` if the evaluation should be stopped and ``False`` otherwise.
@@ -80,7 +85,7 @@ class Stopper(abc.ABC):
         if not self._stop_was_called:
             self._stop_was_called = True
 
-        if self.get_highest_budget(subject) >= self.max_steps:
+        if self.get_current_step(subject) >= self.max_steps:
             return True
 
         return False
