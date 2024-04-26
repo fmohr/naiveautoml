@@ -739,7 +739,7 @@
                 }
             },
             {
-                "class": "sklearn.ensemble._gb.GradientBoostingClassifier",
+                "class": "sklearn.ensemble.HistGradientBoostingClassifier",
                 "params": {
                     "hyperparameters": [
                         {
