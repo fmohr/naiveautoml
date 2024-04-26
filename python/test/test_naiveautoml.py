@@ -364,7 +364,8 @@ class TestNaiveAutoML(unittest.TestCase):
                 logger_name="naml",
                 max_hpo_iterations=10,
                 show_progress=True,
-                scoring = scoring1,
+                scoring=scoring1,
+                execution_timeout=5,
                 side_scores=[scoring2]
             )
             naml.fit(X_train, y_train)
@@ -428,7 +429,13 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # run naml
             start = time.time()
-            naml = naiveautoml.NaiveAutoML(logger_name="naml", max_hpo_iterations=10, show_progress=True, evaluation_fun = evaluation)
+            naml = naiveautoml.NaiveAutoML(
+                logger_name="naml",
+                max_hpo_iterations=10,
+                show_progress=True,
+                evaluation_fun=evaluation,
+                execution_timeout=5
+            )
             naml.fit(X_train, y_train)
             end = time.time()
             runtime = end - start
