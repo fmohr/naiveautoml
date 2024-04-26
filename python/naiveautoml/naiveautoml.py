@@ -785,7 +785,9 @@ class NaiveAutoML:
 
         history_rows = []
         for row in self._history:
-            row_formatted = [row["time"], row["runtime"], row["pl_skeleton"], row["default_hp"]] + row["pl_descriptor"] + [row["score_internal"]]
+            row_formatted = [row["time"], row["runtime"], row["pl_skeleton"], row["default_hp"]]
+            row_formatted += row["pl_descriptor"]
+            row_formatted.append(row["score_internal"])
             if self.side_scores is not None:
                 for s in self.side_scores:
                     row_formatted.append(row["scores"][s])
