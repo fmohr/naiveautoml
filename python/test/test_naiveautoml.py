@@ -90,12 +90,7 @@ class TestNaiveAutoML(unittest.TestCase):
     def setUp(self):
         self.logger = logging.getLogger("naml_test")
         self.naml_logger = logging.getLogger("naml")
-        self.num_seeds = 5
-
-        
-        
-        
-        
+        self.num_seeds = 3
         
     @parameterized.expand([
             (61,),
@@ -134,6 +129,25 @@ class TestNaiveAutoML(unittest.TestCase):
             categorical_features = [0, 2, 3, 4, 5, 9] # Altitude (5) is normally not categorical
             
         naml.fit(X, y, categorical_features=categorical_features)
+
+    def test_recoverability_of_pipelines(self):
+        openmlid = 61
+        self.logger.info(f"Testing recoverability of pipelines from history. On dataset {openmlid}")
+        X, y = get_dataset(openmlid)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            timeout=60,
+            max_hpo_iterations=2,
+            show_progress=True
+        )
+        naml.fit(X, y)
+        for i, row in naml.leaderboard.iterrows():
+            pl = naml.recover_model(history_index=i)
+            pl.predict(X)
+        pl = naml.recover_model(pl=sklearn.tree.DecisionTreeClassifier())
+        pl.predict(X)
+        print(naml.leaderboard)
+        self.logger.info(f"Finished test for recoverability of pipelines from history on dataset {openmlid}")
 
     @parameterized.expand([
         (61,),

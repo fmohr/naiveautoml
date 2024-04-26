@@ -39,7 +39,9 @@ class LccvValidator:
                 results_at_highest_anchor = elcm.df[elcm.df["anchor"] == np.max(elcm.df["anchor"])].mean(
                     numeric_only=True)
                 results = {
-                    s: results_at_highest_anchor[f"score_test_{s}"] if not np.isnan(score) else np.nan for s in scorings
+                    s: np.round(np.mean(results_at_highest_anchor[f"score_test_{s}"]), 4)
+                    if not np.isnan(score) else np.nan
+                    for s in scorings
                 }
                 evaluation_history = {
                     s: elc if not np.isnan(score) else np.nan for s in scorings
@@ -87,7 +89,6 @@ class KFold:
             elif self.instance.task_type:
                 splitter = sklearn.model_selection.KFold(n_splits=self.n_splits, random_state=None, shuffle=True)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
-            evaluation_history = {get_scoring_name(scoring): {} for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
                 X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
@@ -114,7 +115,7 @@ class KFold:
                             raise
 
                     scores[get_scoring_name(scoring)].append(score)
-            return scores, evaluation_history
+            return {k: np.round(np.mean(v), 4) for k, v in scores.items()}, scores
         except KeyboardInterrupt:
             raise
         except Exception as e:
@@ -151,7 +152,6 @@ class Mccv:
                     random_state=None
                 )
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
-            evaluation_history = {get_scoring_name(scoring): {} for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
                 X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
@@ -178,7 +178,7 @@ class Mccv:
                             raise
 
                     scores[get_scoring_name(scoring)].append(score)
-            return scores, evaluation_history
+            return {k: np.round(np.mean(v), 4) for k, v in scores.items()}, scores
         except KeyboardInterrupt:
             raise
         except Exception as e:
