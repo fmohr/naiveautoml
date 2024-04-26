@@ -305,11 +305,10 @@ class NaiveAutoML:
                 if self.hpo_process is None:
                     has_default_hps = True
                 else:
-
                     has_default_hps = all(
-                        comp_params[hp_name] == hp_desc.default_value
+                        (hp_name not in comp_params) or (comp_params[hp_name] == hp_desc.default_value)
                         for hp_name, hp_desc in self.hpo_process.config_spaces[step].items()
-                    )
+                    )  # actually limited because it does not work for mapped hyperparameters!
 
                 descriptor.extend([comp_name, comp_params, has_default_hps])
 
