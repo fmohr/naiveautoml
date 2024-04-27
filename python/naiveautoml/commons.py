@@ -91,9 +91,11 @@ def get_evaluation_fun(instance, evaluation_fun):
         elif is_medium_dataset:
             instance.logger.info("This is a medium dataset, choosing mccv-3 for evaluation")
             return Mccv(instance, n_splits=3)
-        else:
+        elif is_large_dataset:
             instance.logger.info("This is a large dataset, choosing mccv-1 for evaluation")
             return Mccv(instance, n_splits=1)
+        else:
+            raise ValueError("Invalid case for dataset size!! This should never happen. Please report this as a bug.")
 
     elif evaluation_fun == "lccv-80":
         return LccvValidator(instance, 0.8)
