@@ -16,7 +16,7 @@ class LccvValidator:
         self.instance = instance
         self.train_size = train_size
 
-    def __call__(self, pl, X, y, scorings, errors="message"):
+    def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -51,18 +51,29 @@ class LccvValidator:
                 return results, evaluation_history
             except KeyboardInterrupt:
                 raise
-            except Exception:
-                if errors == "message":
-                    self.instance.logger.info(f"Observed exception in validation of pipeline {pl}.")
+            except Exception as e:
+                if error_treatment != "raise":
+                    msg = f"Observed an error: {e}"
+                    if error_treatment == "info":
+                        self.instance.logger.info(msg)
+                    elif error_treatment == "warning":
+                        self.instance.logger.warn(msg)
+                    elif error_treatment == "error":
+                        self.instance.logger.warn(msg)
                 else:
                     raise
             return {s: np.nan for s in scorings}, {s: {} for s in scorings}
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            if errors in ["message", "ignore"]:
-                if errors == "message":
-                    self.instance.logger.error(f"Observed an error: {e}")
+            if error_treatment != "raise":
+                msg = f"Observed an error: {e}"
+                if error_treatment == "info":
+                    self.instance.logger.info(msg)
+                elif error_treatment == "warning":
+                    self.instance.logger.warn(msg)
+                elif error_treatment == "error":
+                    self.instance.logger.warn(msg)
                 return None, None
             else:
                 raise
@@ -73,7 +84,7 @@ class KFold:
         self.instance = instance
         self.n_splits = n_splits
 
-    def __call__(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -105,12 +116,15 @@ class KFold:
                         score = scorer(pl_copy, X_test, y_test)
                     except KeyboardInterrupt:
                         raise
-                    except Exception:
-                        score = np.nan
-                        if errors == "message":
-                            self.instance.logger.info(
-                                f"Observed exception in validation of pipeline {pl_copy}. Placing nan."
-                            )
+                    except Exception as e:
+                        if error_treatment != "raise":
+                            msg = f"Observed an error: {e}"
+                            if error_treatment == "info":
+                                self.instance.logger.info(msg)
+                            elif error_treatment == "warning":
+                                self.instance.logger.warn(msg)
+                            elif error_treatment == "error":
+                                self.instance.logger.warn(msg)
                         else:
                             raise
 
@@ -119,9 +133,14 @@ class KFold:
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            if errors in ["message", "ignore"]:
-                if errors == "message":
-                    self.instance.logger.error(f"Observed an error: {e}")
+            if error_treatment != "raise":
+                msg = f"Observed an error: {e}"
+                if error_treatment == "info":
+                    self.instance.logger.info(msg)
+                elif error_treatment == "warning":
+                    self.instance.logger.warn(msg)
+                elif error_treatment == "error":
+                    self.instance.logger.warn(msg)
                 return None, None
             else:
                 raise
@@ -132,7 +151,7 @@ class Mccv:
         self.instance = instance
         self.n_splits = n_splits
 
-    def __call__(self, pl, X, y, scorings, errors="raise"):
+    def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
         warnings.filterwarnings('ignore', module='numpy')
         try:
@@ -168,12 +187,15 @@ class Mccv:
                         score = scorer(pl_copy, X_test, y_test)
                     except KeyboardInterrupt:
                         raise
-                    except Exception:
-                        score = np.nan
-                        if errors == "message":
-                            self.instance.logger.info(
-                                f"Observed exception in validation of pipeline {pl_copy}. Placing nan."
-                            )
+                    except Exception as e:
+                        if error_treatment != "raise":
+                            msg = f"Observed an error: {e}"
+                            if error_treatment == "info":
+                                self.instance.logger.info(msg)
+                            elif error_treatment == "warning":
+                                self.instance.logger.warn(msg)
+                            elif error_treatment == "error":
+                                self.instance.logger.warn(msg)
                         else:
                             raise
 
@@ -182,9 +204,14 @@ class Mccv:
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            if errors in ["message", "ignore"]:
-                if errors == "message":
-                    self.instance.logger.error(f"Observed an error: {e}")
+            if error_treatment != "raise":
+                msg = f"Observed an error: {e}"
+                if error_treatment == "info":
+                    self.instance.logger.info(msg)
+                elif error_treatment == "warning":
+                    self.instance.logger.warn(msg)
+                elif error_treatment == "error":
+                    self.instance.logger.warn(msg)
                 return None, None
             else:
                 raise

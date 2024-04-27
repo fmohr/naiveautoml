@@ -3,16 +3,9 @@ import naiveautoml
 from naiveautoml.commons import HPOProcess
 import numpy as np
 import sklearn.datasets
-from sklearn import *
-
-import scipy.sparse
-
-from scipy.sparse import lil_matrix
-from scipy.sparse import csr_matrix
 
 import unittest
 from parameterized import parameterized
-import itertools as it
 import time
 import openml
 import pandas as pd
@@ -94,7 +87,7 @@ class TestNaiveAutoML(unittest.TestCase):
         
     @parameterized.expand([
             (61,),
-            (188,), # eucalyptus. Very important because has both missing values and categorical attributes
+            (188,),  # eucalyptus. Very important because has both missing values and categorical attributes
             
         ])
     def test_acceptance_of_dataframe(self, openmlid):
@@ -129,6 +122,27 @@ class TestNaiveAutoML(unittest.TestCase):
             categorical_features = [0, 2, 3, 4, 5, 9] # Altitude (5) is normally not categorical
             
         naml.fit(X, y, categorical_features=categorical_features)
+
+    @parameterized.expand([
+        (61,),   # iris. Quick check for classification
+        (531,),  # boston housing. Quick check for regression
+        (6,),    # letter. Very important because it has many classes
+        (188,),  # eucalyptus. Very important because has both missing values and categorical attributes
+    ])
+    def test_core_functionality(self, openmlid):
+        self.logger.info(f"Start test for core functionality on {openmlid}")
+        X, y = get_dataset(openmlid)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            timeout=30,
+            execution_timeout=3,
+            max_hpo_iterations=2,
+            show_progress=True,
+            raise_errors=False
+        )
+        naml.fit(X, y)
+        self.assertTrue(len(naml.leaderboard) > 0)
+        self.logger.info(f"Finished test for core functionality on {openmlid}")
 
     def test_recoverability_of_pipelines(self):
         openmlid = 61
@@ -209,8 +223,8 @@ class TestNaiveAutoML(unittest.TestCase):
     '''
 
     @parameterized.expand([
-            (61, 45, 0.9),
-            (188, 260, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
+            (61, 5, 0.9),
+            (188, 50, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
             #(1468, 120, 0.94),
@@ -222,10 +236,12 @@ class TestNaiveAutoML(unittest.TestCase):
             #(4134, 400, 0.79),
             
         ])
-    def test_naml_results_classification(self, openmlid, exp_runtime, exp_result):
+    def test_naml_results_classification(self, openmlid, exp_runtime_per_seed, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
-            
+
+        exp_runtime = self.num_seeds * exp_runtime_per_seed
+
         # run naml
         scores = []
         runtimes = []
@@ -541,8 +557,8 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_searchspaces(self):
 
         for openmlid, task_type in {
-            61: "classification",
-            531: "regression"
+            61: "classification",  # iris
+            531: "regression"  # boston housing
         }.items():
 
             self.logger.info(f"Testing search space on {task_type} task on dataset {openmlid}")

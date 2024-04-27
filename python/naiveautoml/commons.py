@@ -81,14 +81,19 @@ def get_evaluation_fun(instance, evaluation_fun):
         LccvValidator, KFold, Mccv
 
     is_small_dataset = instance.X.shape[0] < 2000
+    is_medium_dataset = not is_small_dataset and instance.X.shape[0] < 20000
+    is_large_dataset = not (is_small_dataset or is_medium_dataset)
 
     if evaluation_fun is None:
         if is_small_dataset:
             instance.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
             return Mccv(instance, n_splits=5)
+        elif is_medium_dataset:
+            instance.logger.info("This is a medium dataset, choosing mccv-3 for evaluation")
+            return Mccv(instance, n_splits=3)
         else:
-            instance.logger.info("Dataset is not small. Using LCCV-80 for evaluation")
-            return LccvValidator(instance, 0.8)
+            instance.logger.info("This is a large dataset, choosing mccv-1 for evaluation")
+            return Mccv(instance, n_splits=1)
 
     elif evaluation_fun == "lccv-80":
         return LccvValidator(instance, 0.8)
@@ -120,12 +125,19 @@ class EvaluationPool:
                  tolerance_tuning=0.05,
                  tolerance_estimation_error=0.01,
                  logger_name=None,
-                 use_caching=True
+                 use_caching=True,
+                 error_treatment="info"
                  ):
         domains_task_type = ["classification", "regression"]
         if task_type not in domains_task_type:
-            raise ValueError(f"task_type must be in {domains_task_type}")
+            raise ValueError(f"task_type must be in {domains_task_type} but is {task_type}.")
         self.task_type = task_type
+
+        error_treatment_domain = ["debug", "info", "warning", "error", "raise"]
+        if error_treatment not in error_treatment_domain:
+            raise ValueError(f"error_treatment must be in {error_treatment_domain} but is {error_treatment}.")
+        self.error_treatment = error_treatment
+
         self.logger = logging.getLogger('naiveautoml.evalpool' if logger_name is None else logger_name)
 
         # disable warnings by default
@@ -247,13 +259,13 @@ class EvaluationPool:
             if timeout is not None:
                 if timeout > 1:
                     with pynisher.limit(self.evaluation_fun, wall_time=timeout) as limited_evaluation:
-                        if hasattr(self.evaluation_fun, "errors"):
+                        if hasattr(self.evaluation_fun, "error_treatment"):
                             scores, evaluation_report = limited_evaluation(
                                 pl,
                                 self.X,
                                 self.y,
                                 [self.scoring] + self.side_scores,
-                                errors="ignore"
+                                error_treatment=self.error_treatment
                             )
                         else:
                             scores, evaluation_report = limited_evaluation(
@@ -1449,11 +1461,12 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                 )
                 self.active = False
                 return (
-                    self.get_parametrized_pipeline(configs_by_comps),
-                    "no_imp",
-                    {s: np.nan for s in [self.scoring] + self.side_scores},
-                    None,
-                    None
+                    self.get_parametrized_pipeline(configs_by_comps),  # pipeline
+                    "no_imp",  # status
+                    {s: np.nan for s in [self.scoring] + self.side_scores},  # score
+                    None,  # report
+                    runtime,  # runtime
+                    None  # exception
                 )
 
         # check whether we do a quick exhaustive search and then disable this module
