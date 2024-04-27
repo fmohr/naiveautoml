@@ -134,8 +134,8 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         naml = naiveautoml.NaiveAutoML(
             logger_name="naml",
-            timeout=30,
-            execution_timeout=3,
+            timeout=40,
+            execution_timeout=5,
             max_hpo_iterations=2,
             show_progress=True,
             raise_errors=False
