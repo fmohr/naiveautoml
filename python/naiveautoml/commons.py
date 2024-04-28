@@ -225,10 +225,10 @@ class EvaluationPool:
             if self.is_pipeline_forbidden(pl):
                 self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
                 scores = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
-                evaluation_report = {get_scoring_name(scoring): {} for scoring in [self.scoring] + self.side_scores}
+                evaluation_report = None
                 if hasattr(self.evaluation_fun, "update"):
                     self.evaluation_fun.update(pl, scores)
-                return scores, evaluation_report
+                return "avoided", scores, evaluation_report
 
             process = psutil.Process(os.getpid())
             mem = int(process.memory_info().rss / 1024 / 1024)
@@ -241,7 +241,7 @@ class EvaluationPool:
             if self.use_caching and spl in self.cache:
                 out = {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores}
                 out[get_scoring_name(self.scoring)] = np.round(np.mean(self.cache[spl][1]), 4)
-                return out, self.cache[spl][2]
+                return "cache", out, self.cache[spl][2]
 
             timestamp = time.time()
             if timeout is not None:
@@ -274,7 +274,8 @@ class EvaluationPool:
 
             # if no score was observed, return results here
             if scores is None:
-                return ({get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores},
+                return ("failed",
+                        {get_scoring_name(scoring): np.nan for scoring in [self.scoring] + self.side_scores},
                         {get_scoring_name(scoring): {} for scoring in [self.scoring] + self.side_scores})
             runtime = time.time() - start_outer
 
@@ -287,7 +288,7 @@ class EvaluationPool:
 
             self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
             self.tellEvaluation(pl, scores[get_scoring_name(self.scoring)], evaluation_report, timestamp)
-            return {scoring: np.round(np.mean(scores[scoring]), 4) for scoring in scores}, evaluation_report
+            return "ok", scores, evaluation_report
 
         # if there was an exception, then tell the evaluator function about a nan
         except Exception:
@@ -305,23 +306,24 @@ class EvaluationPool:
                 return True
 
         # forbid pipelines with scalers and trees
-        if "data-pre-processor" in pl and pl["learner"].__class__ in [
-            sklearn.tree.DecisionTreeClassifier,
-            sklearn.tree.DecisionTreeRegressor,
-            sklearn.ensemble.ExtraTreesRegressor,
-            sklearn.ensemble.ExtraTreesClassifier,
-            sklearn.ensemble.HistGradientBoostingClassifier,
-            sklearn.ensemble.HistGradientBoostingRegressor,
-            sklearn.ensemble.GradientBoostingClassifier,
-            sklearn.ensemble.RandomForestClassifier,
-            sklearn.ensemble.RandomForestRegressor
-        ] and pl["data-pre-processor"].__class__ in [
-            sklearn.preprocessing.RobustScaler,
-            sklearn.preprocessing.StandardScaler,
-            sklearn.preprocessing.MinMaxScaler,
-            sklearn.preprocessing.QuantileTransformer
-        ]:
-            return True  # scaling has no effect onf tree-based classifiers
+        if "data-pre-processor" in [e[0] for e in pl.steps]:
+            if pl["learner"].__class__ in [
+                sklearn.tree.DecisionTreeClassifier,
+                sklearn.tree.DecisionTreeRegressor,
+                sklearn.ensemble.ExtraTreesRegressor,
+                sklearn.ensemble.ExtraTreesClassifier,
+                sklearn.ensemble.HistGradientBoostingClassifier,
+                sklearn.ensemble.HistGradientBoostingRegressor,
+                sklearn.ensemble.GradientBoostingClassifier,
+                sklearn.ensemble.RandomForestClassifier,
+                sklearn.ensemble.RandomForestRegressor
+            ] and pl["data-pre-processor"].__class__ in [
+                sklearn.preprocessing.RobustScaler,
+                sklearn.preprocessing.StandardScaler,
+                sklearn.preprocessing.MinMaxScaler,
+                sklearn.preprocessing.QuantileTransformer
+            ]:
+                return True  # scaling has no effect onf tree-based classifiers
 
         # certain pipeline combos are generally forbidden
         forbidden_combos = [
@@ -1135,7 +1137,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_impurity_decrease=min_impurity_decrease,
             warm_start=True)
 
-    if clazz == sklearn.ensemble.GradientBoostingClassifier:
+    if clazz == sklearn.ensemble.HistGradientBoostingClassifier:
         learning_rate = float(params["learning_rate"])
         max_iter = int(params["max_iter"]) if "max_iter" in params else 512
         min_samples_leaf = int(params["min_samples_leaf"])
@@ -1370,10 +1372,12 @@ class HPOProcess:
 
     def evalComp(self, configs_by_comps):
         try:
-            scores, evaluation_report = self.pool.evaluate(self.get_parametrized_pipeline(configs_by_comps),
-                                                           timeout=self.execution_timeout)
+            status, scores, evaluation_report = self.pool.evaluate(
+                pl=self.get_parametrized_pipeline(configs_by_comps),
+                timeout=self.execution_timeout
+            )
             return (
-                "ok",
+                status,
                 scores,
                 evaluation_report,
                 None

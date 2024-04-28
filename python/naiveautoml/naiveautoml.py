@@ -12,6 +12,7 @@ import pynisher
 from ConfigSpace.read_and_write import json as config_json
 
 # sklearn
+from sklearn.base import clone
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.neighbors import KNeighborsClassifier
@@ -113,7 +114,8 @@ class NaiveAutoML:
         self.start_time = None
         self.deadline = None
         self.best_score_overall = None
-        self.chosen_model = None
+        self._chosen_model = None
+        self._history = None
         self.chosen_attributes = None
         self.hpo_process = None
 
@@ -132,6 +134,28 @@ class NaiveAutoML:
         # init logger
         self.logger_name = logger_name
         self.logger = logging.getLogger('naiveautoml' if logger_name is None else logger_name)
+
+    @property
+    def history(self):
+        """
+
+        :return: a dataframe with all considered candidates
+        """
+        return self._history.copy()  # we do not want the actual history to be changed
+
+    @property
+    def leaderboard(self):
+        """
+
+        :return: a dataframe with all successful evaluations, sorted by performance
+        """
+        df_successful = self._history[self._history["status"] == "ok"]
+        df_sorted = df_successful.sort_values([self.scoring, "new_best"], ascending=False)
+        return df_sorted.reset_index().rename(columns={"index": "order"}).copy()
+
+    @property
+    def chosen_model(self):
+        return clone(self._chosen_model)
 
     def get_task_type(self, X, y):
         """
@@ -274,10 +298,22 @@ class NaiveAutoML:
         for step in self.opt_ordering:
             if step in pl_step_names:
                 component = pl[pl_step_names.index(step)]
-                descriptor.append(component.__class__.__name__)
-                descriptor.append(component.get_params())
+
+                comp_name = component.__class__.__name__
+                comp_params = component.get_params()
+
+                if self.hpo_process is None:
+                    has_default_hps = True
+                else:
+                    has_default_hps = all(
+                        (hp_name not in comp_params) or (comp_params[hp_name] == hp_desc.default_value)
+                        for hp_name, hp_desc in self.hpo_process.config_spaces[step].items()
+                    )  # actually limited because it does not work for mapped hyperparameters!
+
+                descriptor.extend([comp_name, comp_params, has_default_hps])
+
             else:
-                descriptor.extend([None, None])
+                descriptor.extend([None, None, None])
         return descriptor
 
     def choose_algorithms(self, X, y):
@@ -328,20 +364,18 @@ class NaiveAutoML:
                 # get and evaluate pipeline for this step
                 pl = self.get_pipeline_for_decision_in_step(step_name, comp, X, y, decisions)
                 exception = None
-                timeout = False
-                status = "ok"
                 eval_start_time = time.time()
+                scores = evaluation_report = None
                 try:
                     if self.execution_timeout is None:
                         timeout = None
                     else:
                         timeout = min(self.execution_timeout, remaining_time if self.deadline is not None else 10**10)
-                    scores, evaluation_report = pool.evaluate(pl, timeout)
+                    status, scores, evaluation_report = pool.evaluate(pl, timeout)
                 except KeyboardInterrupt:
                     raise
                 except pynisher.WallTimeoutException:
                     self.logger.info("TIMEOUT! No result observed for candidate.")
-                    timeout = True
                     status = "timeout"
                 except Exception:
                     exception = traceback.format_exc()
@@ -354,7 +388,7 @@ class NaiveAutoML:
                             f"The trace is as follows:\n{exception}"
                         )
                 runtime = time.time() - eval_start_time
-                if status != "ok":
+                if scores is None:
                     scores = {
                         scoring: np.nan for scoring in
                         [self.scoring] +
@@ -371,10 +405,12 @@ class NaiveAutoML:
                 )
 
                 # update history
-                self.history.append({
+                self._history.append({
                     "time": time.time() - self.start_time,
                     "runtime": runtime,
-                    "pl": self.get_pipeline_descriptor(pl),
+                    "pl_skeleton": clone(pl),
+                    "pl_descriptor": self.get_pipeline_descriptor(pl),
+                    "default_hp": True,
                     "score_internal": score,
                     "scores": scores,
                     "new_best": score > self.best_score_overall,
@@ -495,10 +531,12 @@ class NaiveAutoML:
                     score = scores[get_scoring_name(self.scoring)]
                     if score > self.best_score_overall:
                         self.best_score_overall = score
-                    self.history.append({
+                    self._history.append({
                         "time": time.time() - self.start_time,
                         "runtime": runtime,
-                        "pl": self.get_pipeline_descriptor(pl),
+                        "pl_skeleton": clone(pl),
+                        "pl_descriptor": self.get_pipeline_descriptor(pl),
+                        "default_hp": False,
                         "score_internal": score,
                         "scores": scores,
                         "new_best": score > self.best_score_overall,
@@ -628,7 +666,7 @@ class NaiveAutoML:
         self.X = X
         self.y = y
         self.best_score_overall = -np.inf
-        self.history = []
+        self._history = []
         self.start_time = time.time()
         self.deadline = self.start_time + self.timeout if self.timeout is not None else None
         task_type = self.get_task_type(X, y)
@@ -703,7 +741,7 @@ class NaiveAutoML:
         # choose algorithms
         self.choose_algorithms(self.X, self.y_encoded)
         if self.decisions:
-            self.steps_after_which_algorithm_selection_was_completed = len(self.history)
+            self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
             # tune parameters
             self.tune_parameters(self.X, self.y_encoded)
@@ -725,7 +763,7 @@ class NaiveAutoML:
                     self.logger.warning(f"new pipeline is: {self.pl}")
 
             if len(self.pl.steps) > 0:
-                self.chosen_model = self.pl
+                self._chosen_model = self.pl
             else:
                 self.logger.warning("For some reason (should never happen), the final pipeline was reduced to empty.")
         else:
@@ -733,10 +771,11 @@ class NaiveAutoML:
         self.end_time = time.time()
 
         # compile history
-        history_keys = ["time", "runtime"]
+        history_keys = ["time", "runtime", "pl_skeleton", "default_hp"]
         for step in self.opt_ordering:
             history_keys.append(step + "_class")
             history_keys.append(step + "_hps")
+            history_keys.append(step + "_hps_default")
         history_keys.extend(
             [self.scoring] +
             (self.side_scores if self.side_scores is not None else []) +
@@ -744,21 +783,32 @@ class NaiveAutoML:
         )
 
         history_rows = []
-        for row in self.history:
-            row_formatted = [row["time"]] + [row["runtime"]] + row["pl"] + [row["score_internal"]]
+        for row in self._history:
+            row_formatted = [row["time"], row["runtime"], row["pl_skeleton"], row["default_hp"]]
+            row_formatted += row["pl_descriptor"]
+            row_formatted.append(row["score_internal"])
             if self.side_scores is not None:
                 for s in self.side_scores:
                     row_formatted.append(row["scores"][s])
             row_formatted.extend([row["new_best"], row["evaluation_report"], row["status"], row["exception"]])
             history_rows.append(row_formatted)
-        self.history = pd.DataFrame(history_rows, columns=history_keys)
+        self._history = pd.DataFrame(history_rows, columns=history_keys)
         self.logger.info(f"Runtime was {self.end_time - self.start_time} seconds")
+
+    def recover_model(self, pl=None, history_index=None):
+        if pl is None and history_index is None:
+            raise ValueError(
+                "Provide a pipeline object or a history index to recover a model!"
+            )
+        if pl is None:
+            pl = self._history.iloc[history_index]["pl_skeleton"]
+        return clone(pl).fit(self.X, self.y)
 
     def eval_history(self, X, y):
         pool = self.get_evaluation_pool(X, y)
         scores = []
-        for entry in self.history:
-            s, evaluation_report = pool.evaluate(entry["pl"])
+        for entry in self._history:
+            s, evaluation_report = pool.evaluate(entry["pl_skeleton"])
             scores.append(s)
         return scores
 
