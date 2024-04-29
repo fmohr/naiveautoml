@@ -15,12 +15,9 @@ Another great feature of `naiveautoml` is that you can use it directly on data w
 Missing values will be imputed per default with the median value of a column (for numerical attributes) or the mode (for categorical attributes).
 
 ## Python
-
-### Installation
 Install via `pip install naiveautoml.`
-The current version is 0.0.28.
+The current version is 0.0.29.
 
-### Basic Usage
 We highly recommend to check out the [usage example python notebook](https://github.com/fmohr/naiveautoml/blob/master/python/usage-example.ipynb).
 
 Finding an optimal model for your data is then as easy as running:
@@ -38,10 +35,6 @@ To get the **history** of considered pipelines, together with a (relative) times
 
 ```python
 print(naml.history)
-```
-A version of the history sorted by the main objective and without failed evaluations is obtained via the `leaderboard` property.
-```python
-print(naml.leaderboard)
 ```
 
 Want to limit the **number of candidates considered during hyper-parameter tuning**?
@@ -93,7 +86,6 @@ To additionally evaluate other scoring functions (not used to rank candidates), 
 ```python
 naml = naiveautoml.NaiveAutoML(scoring="accuracy", side_scores=["neg_log_loss", "f1_score"])
 ```
-Of course, the candidates are trained only once, so the only overhead is the computation of each metric itself (and making predictions).
 
 You can also pass a custom scoring function through a dictionary:
 
@@ -119,16 +111,6 @@ naml.fit(X_df, y, categorical_features=["name_of_first_categorical_attribute", "
 alternatively (or if your data is a numpy array), you can use the index of the column:
 ```python
 naml.fit(X_df, y, categorical_features=[4, 9])
-```
-
-### Recovering Trained Models Other Than the Chosen One
-Generally, the history and leaderboard contain untrained objects of all tried pipelines. A trained version of those can be automatically aquired using the id of the pipeline in the history (here 7) and then
-```python
-naml.recover_model(history_index=7)
-```
-If you already have a pipeline object `pl` retrieved from the history you can also run
-```python
-naml.recover_model(pl=pl)
 ```
 
 ## Citing naive automl
