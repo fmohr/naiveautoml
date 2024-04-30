@@ -6,6 +6,7 @@ import pandas as pd
 import sklearn
 from sklearn.model_selection import StratifiedShuffleSplit
 from .stoppers._lcmodel_stopper import LCModelStopper
+from .stoppers._lcpfn_stopper import LCPFNStopper
 
 from .commons import\
     get_scoring_name, build_scorer
@@ -26,9 +27,14 @@ class EarlyDiscardingValidator:
             accepted_stoppers = ["lce", "pfn"]
             if stopper not in accepted_stoppers:
                 raise ValueError(f"'stopper' must be in {accepted_stoppers} but is {stopper}")
-            self.stopper = LCModelStopper(
-                max_steps=10**3  # not sure why this is being used
-            )
+            elif stopper == "lce":
+                self.stopper = LCModelStopper(
+                    max_steps=10**3
+                )
+            elif stopper == "pfn":
+                self.stopper = LCPFNStopper(
+                    max_steps=10**3
+                )
         else:
             self.stopper = stopper
         self.repetitions_per_anchor = repetitions_per_anchor
@@ -117,10 +123,11 @@ class EarlyDiscardingValidator:
 
 class LccvValidator:
 
-    def __init__(self, instance, train_size=0.8):
+    def __init__(self, instance, train_size=0.8, repetitions_per_anchor=5):
         self.r = -np.inf
         self.instance = instance
         self.train_size = train_size
+        self.repetitions_per_anchor = repetitions_per_anchor
 
     def __call__(self, pl, X, y, scorings, errors="message"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -137,7 +144,8 @@ class LccvValidator:
                     r=self.r,
                     base_scoring=scorings[0],
                     additional_scorings=scorings[1:],
-                    target_anchor=self.train_size
+                    target_anchor=self.train_size,
+                    max_evaluations=self.repetitions_per_anchor
                 )
                 if not np.isnan(score) and score > self.r:
                     self.r = score
@@ -172,7 +180,7 @@ class LccvValidator:
                 return None, None
             else:
                 raise
-    
+
     def update(self, pl, scores):
         self.r = max([scores[s] for s in scores])
 

@@ -8,7 +8,7 @@ from numbers import Number
 import lcpfn
 import numpy as np
 import torch
-from _stopper import Stopper
+from ._stopper import Stopper
 
 
 def area_learning_curve(z, f, z_max) -> float:
@@ -107,47 +107,22 @@ class LCPFNStopper(Stopper):
     def _compute_halting_step(self):
         return (self.min_steps - 1) * self._reduction_factor**self._rung
 
-    def _retrieve_best_objective(self) -> float:
-        search_id, _ = self.job.id.split(".")
-        objectives = []
-
-        for obj in self.job.storage.load_out_from_all_jobs(search_id):
-            if isinstance(obj, Number):
-                objectives.append(obj)
-
-        if len(objectives) > 0:
-            return np.max(objectives)
-        else:
-            return np.max(self.observations[1])
-
     def _get_competiting_objectives(self, rung) -> list:
-        search_id, _ = self.job.id.split(".")
-        values = self.job.storage.load_metadata_from_all_jobs(
-            search_id, f"_completed_rung_{rung}"
-        )
-        # Filter out non numerical values (e.g., "F" for failed jobs)
-        values = [v for v in values if isinstance(v, Number)]
+        values = []
+        for subject in self.observed_objectives:
+            if len(self.observed_objectives[subject]) > rung:
+                values.append(self.observed_objectives[subject][rung])
         return values
 
-    def observe(self, budget: float, objective: float):
-        super().observe(budget, objective)
-        self._budget = self.observed_budgets[-1]
-        self._lc_objectives.append(self.objective)
+    def observe(self, subject, budget: float, objective: float):
+        super().observe(
+            subject=subject,
+            budget=budget,
+            objective=objective
+        )
+        self._budget = self.observed_budgets[subject][-1]
+        self._lc_objectives.append(self.get_objective(subject))
         self._objective = self._lc_objectives[-1]
-
-        # For Early-Stopping based on Patience
-        if (
-            not (hasattr(self, "_local_best_objective"))
-            or self._objective > self._local_best_objective
-        ):
-            self._local_best_objective = self._objective
-            self._local_best_step = self.step
-
-        halting_step = self._compute_halting_step()
-        if self._budget >= halting_step:
-            self.job.storage.store_job_metadata(
-                self.job.id, f"_completed_rung_{self._rung}", self._objective
-            )
 
     def stop(self, subject) -> bool:
         # Enforce Pre-conditions Before Learning-Curve based Early Discarding
@@ -155,24 +130,23 @@ class LCPFNStopper(Stopper):
             self.infos_stopped = "max steps reached"
             return True
 
-        if self.step - self._local_best_step >= self.early_stopping_patience:
+        if self.get_current_step(subject) - self._best_step >= self.early_stopping_patience:
             self.infos_stopped = "early stopping"
             return True
 
         # This condition will enforce the stopper to stop the evaluation at the first step
         # for the first evaluation (The FABOLAS method does the same, bias the first samples with
         # small budgets)
-        self.best_objective = self._retrieve_best_objective()
 
         halting_step = self._compute_halting_step()
 
-        if self.step < self.min_steps:
-            if self.step >= halting_step:
+        if self.get_current_step(subject) < self.min_steps:
+            if self.get_current_step(subject) >= halting_step:
                 self._rung += 1
             return False
 
-        if self.step < self._min_obs_to_fit_lc_model:
-            if self.step >= halting_step:
+        if self.get_current_step(subject) < self._min_obs_to_fit_lc_model:
+            if self.get_current_step(subject) >= halting_step:
                 competing_objectives = self._get_competiting_objectives(self._rung)
                 if len(competing_objectives) > self.min_done_for_outlier_detection:
                     q1 = np.quantile(
@@ -190,20 +164,23 @@ class LCPFNStopper(Stopper):
                         < q1 - self.iqr_factor_for_outlier_detection * iqr
                     ):
                         self.infos_stopped = "outlier"
+                        self.observed_budgets = []
+                        self.observed_objectives = []
+                        self._stop_was_called = False
                         return True
                 self._rung += 1
 
             return False
 
         # Check if the halting budget condition is met
-        if self.step < halting_step:
+        if self.get_current_step(subject) < halting_step:
             return False
 
         # Check if the evaluation should be stopped based on LC-Model
 
         # Fit and predict the performance of the learning curve model
-        z_train = self.observed_budgets
-        y_train = self._lc_objectives
+        z_train = self.observed_budgets[subject]
+        y_train = self.observed_objectives[subject]
         z_train, y_train = np.asarray(z_train), np.asarray(y_train)
 
         z_train = torch.Tensor(z_train.reshape(-1, 1))
@@ -217,21 +194,21 @@ class LCPFNStopper(Stopper):
         y_pred = y_pred[0][0].numpy()
 
         # Return whether the configuration should be stopped
-        if self.objective <= y_pred:
+        if self.get_objective(subject=subject) <= y_pred:
             self._rung += 1
         else:
             self.infos_stopped = f"objective={y_pred:.3f}"
 
             return True
-
-    @property
-    def objective(self):
+        
+    def get_objective(self, subject):
+        observations = self.get_observations(subject=subject)
         if self.objective_returned == "last":
-            return self.observations[-1][-1]
+            return observations[-1][-1]
         elif self.objective_returned == "max":
-            return max(self.observations[-1])
+            return max(observations[-1])
         elif self.objective_returned == "alc":
-            z, y = self.observations
+            z, y = observations
             return area_learning_curve(z, y, z_max=self.max_steps)
         else:
             raise ValueError("objective_returned must be one of 'last', 'best', 'alc'")

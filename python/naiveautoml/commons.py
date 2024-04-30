@@ -105,7 +105,9 @@ def get_evaluation_fun(instance, evaluation_fun):
     elif evaluation_fun == "mccv_5":
         return Mccv(instance, n_splits=5)
     elif evaluation_fun == "lce":
-        return EarlyDiscardingValidator(instance)
+        return EarlyDiscardingValidator(instance, stopper="lce")
+    elif evaluation_fun == "pfn":
+        return EarlyDiscardingValidator(instance, stopper="pfn")
 
 
 class EvaluationPool:
@@ -1452,6 +1454,7 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                     self.get_parametrized_pipeline(configs_by_comps),
                     "no_imp",
                     {s: np.nan for s in [self.scoring] + self.side_scores},
+                    {s: {} for s in [self.scoring] + self.side_scores},
                     None,
                     None
                 )
