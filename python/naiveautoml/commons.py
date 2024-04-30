@@ -1468,8 +1468,7 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                     self.get_parametrized_pipeline(configs_by_comps),  # pipeline
                     "no_imp",  # status
                     {s: np.nan for s in [self.scoring] + self.side_scores},  # score
-                    {s: {} for s in [self.scoring] + self.side_scores},  # report history
-                    None,  # report
+                    {s: {} for s in [self.scoring] + self.side_scores},  # report
                     runtime,  # runtime
                     None  # exception
                 )

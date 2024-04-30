@@ -56,7 +56,7 @@ class EarlyDiscardingValidator:
             base = np.sqrt(2)
             min_exp = 8
             max_exp = int(np.log(self.max_anchor) / np.log(base))
-            schedule = [int(base**i) for i in range(min_exp, max_exp + 1)]
+            schedule = [int(base**i) for i in range(min_exp, max_exp + 1) if int(base**i) >= np.unique(y).shape[0]]
             if self.max_anchor not in schedule:
                 schedule.append(self.max_anchor)
 
