@@ -68,6 +68,10 @@ class EarlyDiscardingValidator:
                 scorings = [scorings]
             base_scoring = scorings[0]
             scorers = [build_scorer(scoring) for scoring in scorings]
+            
+            evaluation_report = {
+                s_name: [] for s_name in scorings
+            }
 
             for budget in schedule:
 
@@ -86,9 +90,10 @@ class EarlyDiscardingValidator:
 
                     # compute scores
                     for s_name, s_fun in zip(scorings, scorers):
-                        scores[s_name].append(
-                            s_fun(pl_copy, X[val_index], y[val_index])
-                        )
+                        score = s_fun(pl_copy, X[val_index], y[val_index])
+                        scores[s_name].append(score)
+                
+                evaluation_report[s_name].append({budget: np.mean(scores[base_scoring])})
 
                 self.stopper.observe(
                     subject=subject,
@@ -111,7 +116,7 @@ class EarlyDiscardingValidator:
             print(f"Returning nan at budget {budget}")
             return {s: np.nan for s in self.scorings}, {s: {} for s in scorings}
         print(str(pl))
-        return {s: e[-1] for s, e in scores.items()}, {s: {} for s in scorings}
+        return {s: e[-1] for s, e in scores.items()}, evaluation_report
 
     def update(self, pl, score):
         self.stopper.observe(
@@ -157,12 +162,12 @@ class LccvValidator:
                     if not np.isnan(score) else np.nan
                     for s in scorings
                 }
-                evaluation_history = {
+                evaluation_report = {
                     s: elc if not np.isnan(score) else np.nan for s in scorings
                 }
 
                 # return the object itself, so that it can be overwritten in the pool (necessary because of pynisher)
-                return results, evaluation_history
+                return results, evaluation_report
             except KeyboardInterrupt:
                 raise
             except Exception as e:
