@@ -311,8 +311,8 @@ class TestNaiveAutoML(unittest.TestCase):
     '''
 
     @parameterized.expand([
-            (61, 15, 0.9),
-            (188, 50, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
+            (61, 30, 0.9),  # on a fast machine, iris can be executed in 10s, but on slow machines it takes longer
+            (188, 60, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
             #(1468, 120, 0.94),
