@@ -5,9 +5,6 @@ import numpy as np
 import pandas as pd
 import sklearn
 
-from .commons import\
-    get_scoring_name, build_scorer
-
 
 class LccvValidator:
 
@@ -99,7 +96,7 @@ class KFold:
                 )
             elif self.instance.task_type:
                 splitter = sklearn.model_selection.KFold(n_splits=self.n_splits, random_state=None, shuffle=True)
-            scores = {get_scoring_name(scoring): [] for scoring in scorings}
+            scores = {scoring["name"]: [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
                 X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
@@ -111,7 +108,7 @@ class KFold:
                 pl_copy.fit(X_train, y_train)
 
                 for scoring in scorings:
-                    scorer = build_scorer(scoring)
+                    scorer = scoring["fun"]
                     try:
                         score = scorer(pl_copy, X_test, y_test)
                     except KeyboardInterrupt:
@@ -128,7 +125,7 @@ class KFold:
                         else:
                             raise
 
-                    scores[get_scoring_name(scoring)].append(score)
+                    scores[scoring["name"]].append(score)
             return {k: np.round(np.mean(v), 4) for k, v in scores.items()}, scores
         except KeyboardInterrupt:
             raise
@@ -170,7 +167,7 @@ class Mccv:
                     train_size=0.8,
                     random_state=None
                 )
-            scores = {get_scoring_name(scoring): [] for scoring in scorings}
+            scores = {scoring["name"]: [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
                 X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
@@ -182,7 +179,7 @@ class Mccv:
                 pl_copy.fit(X_train, y_train)
 
                 for scoring in scorings:
-                    scorer = build_scorer(scoring)
+                    scorer = scoring["fun"]
                     try:
                         score = scorer(pl_copy, X_test, y_test)
                     except KeyboardInterrupt:
@@ -199,7 +196,7 @@ class Mccv:
                         else:
                             raise
 
-                    scores[get_scoring_name(scoring)].append(score)
+                    scores[scoring["name"]].append(score)
             return {k: np.round(np.mean(v), 4) for k, v in scores.items()}, scores
         except KeyboardInterrupt:
             raise

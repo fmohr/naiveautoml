@@ -1,6 +1,5 @@
 import logging
 import naiveautoml
-from naiveautoml.commons import HPOProcess
 import numpy as np
 import sklearn.datasets
 
@@ -51,7 +50,7 @@ class TestNaiveAutoML(unittest.TestCase):
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
-        log_level = logging.WARN
+        log_level = logging.DEBUG
 
         # configure naml logger (by default set to WARN, change it to DEBUG if tests fail)
         naml_logger = logging.getLogger("naml")
@@ -93,7 +92,13 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_acceptance_of_dataframe(self, openmlid):
         self.logger.info(f"Testing acceptance of dataframes")
         X, y = get_dataset(openmlid, as_numpy=False)
-        naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout=15, max_hpo_iterations=1, show_progress=True)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            timeout_overall=15,
+            max_hpo_iterations=1,
+            show_progress=True,
+            raise_errors=True
+        )
         naml.fit(X, y)
         
     @parameterized.expand([
@@ -102,7 +107,7 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_definition_of_own_categorical_attributes_in_dataframe(self, openmlid):
         self.logger.info(f"Testing acceptance of definition of own categorical attributes in pandas")
         X, y = get_dataset(openmlid, as_numpy=False)
-        naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout=15, max_hpo_iterations=1, show_progress=True)
+        naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout_overall=15, max_hpo_iterations=1, show_progress=True)
         
         if openmlid == 188:
             categorical_features_by_string = ["Abbrev", "Locality", "Map_Ref", "Latitude", "Altitude", "Sp"] # Altitude is normally not categorical
@@ -116,7 +121,7 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_definition_of_own_categorical_attributes_in_numpy(self, openmlid):
         self.logger.info(f"Testing acceptance of definition of own categorical attributes in numpy")
         X, y = get_dataset(openmlid, as_numpy=True)
-        naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout=15, max_hpo_iterations=1, show_progress=True)
+        naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout_overall=15, max_hpo_iterations=1, show_progress=True)
         
         if openmlid == 188:
             categorical_features = [0, 2, 3, 4, 5, 9] # Altitude (5) is normally not categorical
@@ -134,8 +139,8 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         naml = naiveautoml.NaiveAutoML(
             logger_name="naml",
-            timeout=60,
-            execution_timeout=5,
+            timeout_overall=60,
+            timeout_candidate=5,
             max_hpo_iterations=2,
             show_progress=True,
             raise_errors=False
@@ -150,7 +155,7 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         naml = naiveautoml.NaiveAutoML(
             logger_name="naml",
-            timeout=60,
+            timeout_overall=60,
             max_hpo_iterations=2,
             show_progress=True
         )
@@ -174,7 +179,7 @@ class TestNaiveAutoML(unittest.TestCase):
             logger_name="naml",
             max_hpo_iterations=max_hpo_iterations,
             show_progress=True,
-            execution_timeout=2
+            timeout_overall=2
         )
         naml.fit(X, y)
 
@@ -192,7 +197,12 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(61)
 
         # run naml
-        naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout=60, max_hpo_iterations=10, show_progress=True)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            timeout_overall=60,
+            max_hpo_iterations=10,
+            show_progress=True
+        )
         naml.fit(X, y)
         history = naml.history.iloc[naml.steps_after_which_algorithm_selection_was_completed:]
         self.assertTrue(len(pd.unique(history["learner_class"])) <= 2)
