@@ -1,7 +1,5 @@
 from .._interfaces import HPOptimizer
 import time
-from tqdm import tqdm
-import numpy as np
 import pandas as pd
 
 
@@ -13,7 +11,7 @@ class RandomHPO(HPOptimizer):
         self.configs_since_last_imp = None
         self.time_since_last_imp = None
 
-    def reset(self,**kwargs):
+    def reset(self, **kwargs):
         super().reset(**kwargs)
         self.its = 0
         self.configs_since_last_imp = 0
@@ -34,7 +32,10 @@ class RandomHPO(HPOptimizer):
 
         # evaluate configured pipeline
         time_start_eval = time.time()
-        status, scores, evaluation_report, exception = self.evaluator.evaluate(candidate_pipeline)
+        status, scores, evaluation_report, exception = self.evaluator.evaluate(
+            pl=candidate_pipeline,
+            timeout=self.task.timeout_candidate
+        )
         if not isinstance(scores, dict):
             raise TypeError(f"""
 The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}

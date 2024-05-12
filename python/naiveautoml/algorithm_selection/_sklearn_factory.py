@@ -1,7 +1,6 @@
 # core stuff
 import json
 import numpy as np
-import itertools as it
 
 # HPO and process control
 from ConfigSpace.read_and_write import json as config_json
@@ -22,7 +21,6 @@ import sklearn.linear_model
 import sklearn.ensemble
 import sklearn.cluster
 import sklearn.gaussian_process
-from sklearn.pipeline import Pipeline
 
 
 def fullname(o):
@@ -62,7 +60,6 @@ def check_for_bool(p: str, allow_non_bool=False) -> bool:
         raise ValueError("%s is not a bool" % str(p))
 
 
-
 def get_class(kls):
     parts = kls.split('.')
     module = ".".join(parts[:-1])
@@ -79,6 +76,7 @@ def get_class(kls):
             m = getattr(m, comp)
 
     return m
+
 
 def build_estimator(comp, params, X, y):
     if params is None:

@@ -9,16 +9,11 @@ import scipy.sparse
 import time
 import pynisher
 import itertools as it
-import json
 
 import ConfigSpace
-from ConfigSpace.read_and_write import json as config_json
 import traceback
 
 import sklearn.model_selection
-
-
-
 
 
 def get_evaluation_fun(instance, evaluation_fun):

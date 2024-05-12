@@ -152,16 +152,7 @@ class AlgorithmSelector(ABC):
 
         :param task:
         :return: a dataframe that contains one row for every recommended algorithm (ordered by recommendation)
-            The following columns must be included:
-                - `pipeline` an *untrained* object of the pipeline that could be trained later
-                - `time_found`
-                - `time_evaluation`
-                - one column for the main scoring and each scoring in passive_scorings, with the respective column names
-                - the status of the evaluation (ok, timeout, error)
-                - an optional detailed report of the candidate evaluation
-                - `cs` is a config space object and
-                - `make` is a function that receives a configuration and creates an object with `fit`, `predict`, and `predict_proba` functionality
-        """
+            """
         raise NotImplementedError
 
     @property
@@ -244,6 +235,7 @@ class HPOptimizer(ABC):
 
     def do_exhaustive_search(self):
 
+        remaining_time = 0
         # check whether we do a quick exhaustive search and then disable this module
         if len(self.eval_runtimes) >= 10:
             total_expected_runtime = self.space_size * np.mean(self.eval_runtimes)
@@ -255,7 +247,7 @@ class HPOptimizer(ABC):
                     f"Expected time to evaluate all configurations is only {total_expected_runtime}."
                     "Doing exhaustive search."
                 )
-                configs = get_all_configurations(self.config_spaces)
+                configs = None  # get_all_configurations(self.config_spaces)
                 self.logger.info(f"Now evaluation all {len(configs)} possible configurations.")
                 for configs_by_comps in configs:
                     status, scores, evaluation_report, exception = self.evalComp(configs_by_comps)
@@ -267,7 +259,7 @@ class HPOptimizer(ABC):
                         self.best_configs = configs_by_comps
                 self.logger.info("Configuration space completely exhausted.")
         return self.get_parametrized_pipeline(
-            configs_by_comps), status, scores, evaluation_report, runtime, exception
+            configs_by_comps), status, scores, evaluation_report, None, exception
 
     @property
     def description(self):

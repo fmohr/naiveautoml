@@ -127,10 +127,6 @@ class NaiveAutoML:
         self.evaluator = None
         self.task_type = task_type
         self.task = None
-        #self.y_encoded = None
-        #self.task_type = task_type
-        #self.inferred_task_type = None
-
 
     @property
     def history(self):
@@ -211,7 +207,9 @@ class NaiveAutoML:
         self._history = self.algorithm_selector.run(
             deadline=deadline
         )
-        relevant_history = self._history[self._history[self.task.scoring["name"]].notna()] if self._history is not None else None
+        relevant_history = self._history[self._history[self.task.scoring["name"]].notna()]\
+            if self._history is not None \
+            else None
         if (
                 isinstance(relevant_history, pd.DataFrame) and
                 len(relevant_history) > 0 and
@@ -232,7 +230,10 @@ class NaiveAutoML:
                     task=self.task,
                     runtime_of_default_config=as_result_for_candidate["runtime"],
                     config_space=self.algorithm_selector.get_config_space(as_result_for_candidate),
-                    history_descriptor_creation_fun=lambda hp_config: self.algorithm_selector.create_history_descriptor(as_result_for_candidate, hp_config),
+                    history_descriptor_creation_fun=lambda hp_config: self.algorithm_selector.create_history_descriptor(
+                        as_result_for_candidate,
+                        hp_config
+                    ),
                     evaluator=self.evaluator
                 )
                 df_results_hpo = self.hp_optimizer.optimize(deadline=deadline)

@@ -11,8 +11,6 @@ import scipy as sp
 # HPO and process control
 from ConfigSpace.read_and_write import json as config_json
 import time
-import pynisher
-import traceback
 
 # progress bar
 from tqdm import tqdm
@@ -417,37 +415,6 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
     def get_standard_learner_instance(self, X, y):
         return self.standard_classifier() if self.inferred_task_type == "classification" else self.standard_regressor()
 
-
-
-
-    def get_shuffled_version_of_search_space(self):
-        search_space = []
-        for step in self.search_space:
-            comps = step["components"].copy()
-            random.shuffle(comps)
-            search_space.append(step)
-        return search_space
-
-    def check_combinations(self, X, y):
-
-        pool = self.get_evaluation_pool(X, y)
-        algorithms_per_stage = []
-        names = []
-        for step in self.search_space:
-            names.append(step["name"])
-            cands = []
-            if step["name"] != "learner":
-                cands.append(None)
-            cands.extend([get_class(comp["class"]) for comp in step["components"]])
-            algorithms_per_stage.append(cands)
-
-        for combo in it.product(*algorithms_per_stage):
-            pl = Pipeline(steps=[(names[i], clazz()) for i, clazz in enumerate(combo) if clazz is not None])
-            if pool.is_pipeline_forbidden(pl):
-                self.logger.debug("SKIP FORBIDDEN")
-            else:
-                pool.evaluate(pl, timeout=self.execution_timeout)
-
     def get_instances_of_currently_selected_components_per_step(self, hpo_process, X, y):
         steps = []
         for step_name, comp in hpo_process.comps_by_steps:
@@ -494,31 +461,6 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             pl = Pipeline(steps=self.mandatory_pre_processing + steps[i:])
         return pl
 
-    def get_pipeline_descriptor(self, pl):
-        descriptor = []
-        pl_step_names = [s[0] for s in pl.steps]
-        for step in self.opt_ordering:
-            if step in pl_step_names:
-                component = pl[pl_step_names.index(step)]
-
-                comp_name = component.__class__.__name__
-                comp_params = component.get_params()
-
-                has_default_hps = True
-                #if self.hpo_process is None:
-                #else:
-#
-#                    has_default_hps = all(
-#                        (hp_name not in comp_params) or (comp_params[hp_name] == hp_desc.default_value)
-#                        for hp_name, hp_desc in self.hpo_process.config_spaces[step].items()
-#                    )  # actually limited because it does not work for mapped hyperparameters!
-#
-                descriptor.extend([comp_name, comp_params, has_default_hps])
-
-            else:
-                descriptor.extend([None, None, None])
-        return descriptor
-
     def substitute_targets(self, y):
         if self.task.inferred_task_type is None:
             raise Exception("Task has not been inferred yet. Run reset to do so.")
@@ -554,4 +496,3 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             for comp in step["components"]:
                 summary += "\n\t" + comp['class']
         return summary
-
