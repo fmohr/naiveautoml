@@ -34,6 +34,12 @@ def get_dataset(openmlid, as_numpy = True):
     return X, y
 
 
+def evaluate_randomly(pl, X, y, scoring_functions):
+    return (
+        {s["name"]: np.random.random() for s in scoring_functions},  # scores
+        {s["name"]: {} for s in scoring_functions}  # evaluation reports
+    )
+
 class TestNaiveAutoML(unittest.TestCase):
     
     @staticmethod
@@ -50,7 +56,7 @@ class TestNaiveAutoML(unittest.TestCase):
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
-        log_level = logging.DEBUG
+        log_level = logging.WARN
 
         # configure naml logger (by default set to WARN, change it to DEBUG if tests fail)
         naml_logger = logging.getLogger("naml")
@@ -102,7 +108,7 @@ class TestNaiveAutoML(unittest.TestCase):
         naml.fit(X, y)
         
     @parameterized.expand([
-            (188,), # eucalyptus. Very important because has both missing values and categorical attributes
+            (188,),  # eucalyptus. Very important because has both missing values and categorical attributes
         ])
     def test_definition_of_own_categorical_attributes_in_dataframe(self, openmlid):
         self.logger.info(f"Testing acceptance of definition of own categorical attributes in pandas")
@@ -110,13 +116,13 @@ class TestNaiveAutoML(unittest.TestCase):
         naml = naiveautoml.NaiveAutoML(logger_name="naml", timeout_overall=15, max_hpo_iterations=1, show_progress=True)
         
         if openmlid == 188:
-            categorical_features_by_string = ["Abbrev", "Locality", "Map_Ref", "Latitude", "Altitude", "Sp"] # Altitude is normally not categorical
+            categorical_features_by_string = ["Abbrev", "Locality", "Map_Ref", "Latitude", "Altitude", "Sp"]  # Altitude is normally not categorical
             categorical_features_by_index = [list(X.columns).index(c) for c in categorical_features_by_string]
         naml.fit(X, y, categorical_features=categorical_features_by_index)
         naml.fit(X, y, categorical_features=categorical_features_by_string)
         
     @parameterized.expand([
-            (188,), # eucalyptus. Very important because has both missing values and categorical attributes
+            (188,),  # eucalyptus. Very important because has both missing values and categorical attributes
         ])
     def test_definition_of_own_categorical_attributes_in_numpy(self, openmlid):
         self.logger.info(f"Testing acceptance of definition of own categorical attributes in numpy")
@@ -157,7 +163,8 @@ class TestNaiveAutoML(unittest.TestCase):
             logger_name="naml",
             timeout_overall=60,
             max_hpo_iterations=2,
-            show_progress=True
+            show_progress=True,
+            evaluation_fun=evaluate_randomly
         )
         naml.fit(X, y)
         for i, row in naml.leaderboard.iterrows():
@@ -179,11 +186,14 @@ class TestNaiveAutoML(unittest.TestCase):
             logger_name="naml",
             max_hpo_iterations=max_hpo_iterations,
             show_progress=True,
-            timeout_overall=2
+            evaluation_fun=evaluate_randomly
         )
         naml.fit(X, y)
 
-        self.assertEqual(sum([len(s["components"]) for s in naml.search_space]) + max_hpo_iterations, len(naml.history))
+        self.assertEqual(
+            sum([len(s["components"]) for s in naml.algorithm_selector.search_space]) + max_hpo_iterations,
+            len(naml.history)
+        )
 
     def test_constant_algorithms_in_hpo_phase(self):
         """
@@ -234,7 +244,7 @@ class TestNaiveAutoML(unittest.TestCase):
 
     @parameterized.expand([
             (61, 5, 0.9),
-            (188, 50, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
+            (188, 50, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
             #(1468, 120, 0.94),
@@ -265,7 +275,7 @@ class TestNaiveAutoML(unittest.TestCase):
             start = time.time()
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
-                execution_timeout=10,
+                #timeout_candidate=3,
                 max_hpo_iterations=5,
                 show_progress=True
             )
@@ -284,8 +294,8 @@ class TestNaiveAutoML(unittest.TestCase):
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
         score_mean = np.round(np.mean(scores), 2)
-        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
-        self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad. Expected was at least {exp_result}s but true avg score was {score_mean}")
+        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded on dataset {openmlid}. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
+        self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad on dataset {openmlid}. Expected was at least {exp_result}s but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
         
     @parameterized.expand([
@@ -311,7 +321,7 @@ class TestNaiveAutoML(unittest.TestCase):
             start = time.time()
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
-                timeout=75,
+                timeout_overall=75,
                 max_hpo_iterations=5,
                 show_progress=True,
                 task_type="regression",
@@ -355,7 +365,6 @@ class TestNaiveAutoML(unittest.TestCase):
             
         ])
     def test_individual_scoring(self, openmlid, exp_runtime, exp_result):
-        return
         X, y = get_dataset(openmlid)
         self.logger.info(f"Testing individual scoring function on dataset {openml}")
         
@@ -391,8 +400,9 @@ class TestNaiveAutoML(unittest.TestCase):
                 max_hpo_iterations=10,
                 show_progress=True,
                 scoring=scoring1,
-                execution_timeout=5,
-                side_scores=[scoring2]
+                timeout_candidate=2,
+                timeout_overall=20,
+                passive_scorings=[scoring2]
             )
             naml.fit(X_train, y_train)
             end = time.time()
@@ -436,12 +446,6 @@ class TestNaiveAutoML(unittest.TestCase):
             f"Expecting {exp_result} after {exp_runtime}s"
         )
         
-        def evaluation(pl, X, y, scoring_functions):
-            return (
-                {s: np.mean(sklearn.model_selection.cross_validate(pl, X, y, scoring=s)["test_score"]) for s in scoring_functions},
-                {s: {} for s in scoring_functions}
-                )
-        
         scorer = sklearn.metrics.get_scorer("accuracy")
         
         # run naml
@@ -459,8 +463,8 @@ class TestNaiveAutoML(unittest.TestCase):
                 logger_name="naml",
                 max_hpo_iterations=10,
                 show_progress=True,
-                evaluation_fun=evaluation,
-                execution_timeout=5
+                evaluation_fun=evaluate_randomly,
+                timeout_candidate=2
             )
             naml.fit(X_train, y_train)
             end = time.time()
@@ -509,11 +513,11 @@ class TestNaiveAutoML(unittest.TestCase):
 
             def __call__(self, pl, X, y, scoring_functions):
                 results = {
-                    s: np.mean(sklearn.model_selection.cross_validate(pl, X, y, scoring=s)["test_score"])
+                    s["name"]: np.random.rand()
                     for s in scoring_functions
                 }
                 evaluation_report = {
-                    s: {} for s in scoring_functions
+                    s["name"]: {} for s in scoring_functions
                 }
                 return results, evaluation_report
 
@@ -550,7 +554,7 @@ class TestNaiveAutoML(unittest.TestCase):
             scores.append(score)
             self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
 
-            self.assertEqual(len(naml.history), len(evaluation.history), "History lengths don't match!")
+            self.assertEqual(len(naml.history[naml.history["status"] != "avoided"]), len(evaluation.history), "History lengths don't match!")
 
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
@@ -577,39 +581,61 @@ class TestNaiveAutoML(unittest.TestCase):
             scoring = "accuracy" if task_type == "classification" else "r2"
 
             naml = naiveautoml.NaiveAutoML(
-                search_space=f"naiveautoml/searchspace-{task_type}.json",
-                scoring=scoring
+                task_type=task_type,
+                scoring=scoring,
+                timeout_candidate=1
             )
-            naml.reset(X, y, None)
+            task = naml.get_task_from_data(X, y, None)
+            naml.reset(task)
+            hp_optimizer = naml.hp_optimizer
 
-            preprocessors = naml.search_space[0]["components"] + naml.search_space[1]["components"]
-            learners = naml.search_space[2]["components"]
+            from naiveautoml.algorithm_selection._sklearn_hpo import HPOHelper
+            helper = HPOHelper(search_space=naml.algorithm_selector.search_space)
 
-            for algo_type, algo_set in zip(["pp", "learner"], [preprocessors, learners]):
+            faked_as_info_raw = {
+                f"{k['name']}_class": None for k in naml.algorithm_selector.search_space
+            }
+
+            for step in naml.algorithm_selector.search_space:
+                step_name = step["name"]
+                algo_set = step["components"]
 
                 for algo in algo_set:
 
-                    if "sklearn.neighbors._classification.KNeighborsClassifier" not in algo["class"]:
-                        continue
+                    #if "sklearn.neighbors._classification.KNeighborsClassifier" not in algo["class"]:
+                     #   continue
 
                     self.logger.info(f"Next algorithm: {algo['class']}")
-                    if algo_type == "learner":
-                        steps = [("learner", algo)]
-                    else:
-                        steps = [("pp", algo), ("learner", learners[3 if task_type == "classification" else 0])]
-                        self.logger.info(f"This is a pre-processor. Using {steps[-1][1]['class']} as learner.")
+                    selection = {step_name: algo["class"]}
+                    if step_name != "learner":
+                        selection.update({"learner": naml.algorithm_selector.search_space[2]["components"][3]["class"]})
+
+                    faked_as_info = faked_as_info_raw.copy()
+                    faked_as_info.update({
+                        f"{k}_class": v for k, v in selection.items()
+                    })
 
                     # get HPO process for supposed selection
-                    hpo_process = naml.get_hpo_process(selected_components_by_step=steps)
+                    hp_optimizer.reset(
+                        task=task,
+                        runtime_of_default_config=0,
+                        config_space=helper.get_config_space_for_selected_algorithms(selection),
+                        history_descriptor_creation_fun=lambda hp_config: naml.algorithm_selector.create_history_descriptor(faked_as_info, hp_config),
+                        evaluator=naml.evaluator
+                    )
 
                     # create and evaluate random configurations
-                    for _ in range(10):
-                        pl, status, scores, evaluation_report, runtime, exception = hpo_process.step()
+                    for seed in range(10):
+                        self.logger.debug(f"Evaluating seed {seed}")
+                        s_result = hp_optimizer.step().iloc[0]
+                        status = s_result["status"]
+                        score = s_result[scoring]
+                        exception = s_result["exception"]
                         self.assertFalse(
-                            np.isnan(scores[scoring]) and status == "ok",
+                            np.isnan(score) and status == "ok",
                             "Observed nan score even though status is ok"
                         )
-                        self.logger.debug(f"{_}: {status} {scores}")
+                        self.logger.debug(f"{seed}: {status} {score}")
                         if status == "exception":
                             allowed_exception_texts = [
                                 "There are significant negative eigenvalues",
@@ -635,6 +661,6 @@ class TestNaiveAutoML(unittest.TestCase):
             automl = naiveautoml.NaiveAutoML(
                 evaluation_fun="mccv_1",
                 show_progress=True,
-                timeout=30
+                timeout_overall=30
             )
             automl.fit(X_train, y_train)

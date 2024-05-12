@@ -483,7 +483,6 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                     steps_ordered.append(get_step_with_name(steps_tmp, step_inner["name"]))
             return Pipeline(steps=self.mandatory_pre_processing + steps_ordered)
 
-
     def build_pipeline(self, hpo_process, X, y):
         steps = self.get_instances_of_currently_selected_components_per_step(hpo_process, X, y)
         pl = Pipeline(self.mandatory_pre_processing + steps)

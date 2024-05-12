@@ -6,6 +6,8 @@ from scipy.sparse import issparse, spmatrix
 from ConfigSpace import ConfigurationSpace
 from sklearn.metrics import get_scorer, make_scorer
 import pandas as pd
+import time
+from tqdm import tqdm
 
 
 class SupervisedTask:
@@ -52,7 +54,7 @@ class SupervisedTask:
             else:
                 self.scoring = prepare_scoring("neg_mean_squared_error")
         else:
-            self.scoring = scoring
+            self.scoring = prepare_scoring(scoring)
 
         self.passive_scorings = []
         if passive_scorings is not None:
@@ -175,32 +177,40 @@ class AlgorithmSelector(ABC):
 
 class HPOptimizer(ABC):
 
-    def __init__(self, logger):
+    def __init__(self, show_progress=False, logger=None):
         super().__init__()
 
+        self.show_progress = show_progress
         self.logger = logger
 
         self.task = None
+        self.runtime_of_default_config = None
         self.config_space = None
         self.create_history_descriptor = None
         self.evaluator = None
         self._history = None
         self.best_score = None
         self.active = False
+        self.pbar = None
 
     def reset(self,
               task: SupervisedTask,
+              runtime_of_default_config,
               config_space: ConfigurationSpace,
               history_descriptor_creation_fun: Callable,
               evaluator
               ):
         self.task = task
+        self.runtime_of_default_config = runtime_of_default_config
         self.config_space = config_space
         self.create_history_descriptor = history_descriptor_creation_fun
         self.evaluator = evaluator
         self._history = None
         self.best_score = -np.inf
         self.active = True
+        if self.show_progress:
+            print("Progress for hyperparameter optimization:")
+            self.pbar = tqdm(total=self.task.max_hpo_iterations)
 
     def step(self):
         """
@@ -209,21 +219,30 @@ class HPOptimizer(ABC):
         """
         raise NotImplementedError
 
-    def optimize(self):
+    def optimize(self, deadline=None):
 
         # now conduct HPO until there is no local improvement or the deadline is hit
         self.logger.info("--------------------------------------------------")
-        self.logger.info("Entering HPO phase")
+        self.logger.info(
+            f"Entering HPO phase."
+            f"{('Remaining time: ' + str(round(deadline - time.time(), 2)) + 's') if deadline is not None else ''}"
+        )
         self.logger.info("--------------------------------------------------")
 
         df_result = None
+        time_for_last_step = self.runtime_of_default_config
         for _ in range(self.task.max_hpo_iterations):
+            if deadline is not None and deadline - time.time() < time_for_last_step:
+                self.logger.info("Next iteration would probably take more time than the deadline allows. Stopping HPO.")
+                break
+
+            start = time.time()
             df_step = self.step()
+            time_for_last_step = time.time() - start
             df_result = df_step if df_result is None else pd.concat([df_result, df_step])
         return df_result
 
     def do_exhaustive_search(self):
-
 
         # check whether we do a quick exhaustive search and then disable this module
         if len(self.eval_runtimes) >= 10:

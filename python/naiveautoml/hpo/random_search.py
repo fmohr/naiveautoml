@@ -7,9 +7,17 @@ import pandas as pd
 
 class RandomHPO(HPOptimizer):
 
-    def __init__(self, logger):
-        super().__init__(logger)
+    def __init__(self, show_progress=False, logger=None):
+        super().__init__(show_progress=show_progress, logger=logger)
+        self.its = None
+        self.configs_since_last_imp = None
+        self.time_since_last_imp = None
+
+    def reset(self,**kwargs):
+        super().reset(**kwargs)
         self.its = 0
+        self.configs_since_last_imp = 0
+        self.time_since_last_imp = 0
 
     def step(self, remaining_time=None):
         self.its += 1
@@ -50,7 +58,6 @@ The scores must be a dictionary as a function of the scoring functions. Observed
             self.best_score = score
             self.time_since_last_imp = 0
             self.configs_since_last_imp = 0
-            self.best_config = candidate_history_entry
         else:
             self.configs_since_last_imp += 1
             self.time_since_last_imp += runtime
@@ -65,6 +72,11 @@ The scores must be a dictionary as a function of the scoring functions. Observed
                     "Stopping HPO here."
                 )
                 self.active = False
+
+        if self.show_progress:
+            self.pbar.update(1)
+            if self.its == self.task.max_hpo_iterations:
+                self.pbar.close()
 
         return pd.DataFrame({k: [v] for k, v in candidate_history_entry.items()})
 

@@ -189,7 +189,7 @@ class EvaluationPool:
         if self.use_caching and spl in self.cache:
             out = {scoring["name"]: np.nan for scoring in [self.scoring] + self.side_scores}
             out[self.scoring["name"]] = np.round(np.mean(self.cache[spl][1]), 4)
-            return "cache", out, self.cache[spl][2]
+            return "cache", out, self.cache[spl][2], None
 
         timestamp = time.time()
         scores = None
@@ -233,6 +233,17 @@ class EvaluationPool:
         except Exception:
             status = "exception"
             exception = traceback.format_exc()
+            if self.error_treatment == "raise":
+                raise
+            log_txt = f"Observed Exception during evaluation: {exception}"
+            if self.error_treatment == "debug":
+                self.logger.debug(log_txt)
+            elif self.error_treatment == "info":
+                self.logger.info(log_txt)
+            elif self.error_treatment == "warning":
+                self.logger.warning(log_txt)
+            elif self.error_treatment == "error":
+                self.logger.error(log_txt)
 
         if scores is None:
             scores = {s: np.nan for s in [self.task.scoring["name"]] + [s["name"] for s in self.task.passive_scorings]}

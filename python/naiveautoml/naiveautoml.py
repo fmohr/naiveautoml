@@ -62,7 +62,11 @@ class NaiveAutoML:
                 kwargs_as["strictly_naive"] = strictly_naive
             if algorithm_selector == "sklearn":
                 from .algorithm_selection.sklearn import SKLearnAlgorithmSelector
-                self.algorithm_selector = SKLearnAlgorithmSelector(raise_errors=raise_errors, **kwargs_as)
+                self.algorithm_selector = SKLearnAlgorithmSelector(
+                    show_progress=show_progress,
+                    raise_errors=raise_errors,
+                    **kwargs_as
+                )
             else:
                 raise ValueError(
                     f"algorithm_selector was specified as string '{algorithm_selector}' "
@@ -77,7 +81,11 @@ class NaiveAutoML:
             if hp_optimizer not in accepted_optimizers:
                 raise ValueError(f"hp_optimizer if string must be in {accepted_optimizers} but is {hp_optimizer}")
             from .hpo.random_search import RandomHPO
-            self.hp_optimizer = RandomHPO(logger=self.logger, **kwargs_hpo)
+            self.hp_optimizer = RandomHPO(
+                show_progress=show_progress,
+                logger=self.logger,
+                **kwargs_hpo
+            )
         else:
             if not isinstance(hp_optimizer, HPOptimizer):
                 raise ValueError(
@@ -153,18 +161,14 @@ class NaiveAutoML:
             logger_name=None if self.logger_name is None else self.logger_name + ".pool"
         )
 
-    def tune_parameters(self, task:SupervisedTask = None):
-        if task is None:
-            task = self.task
-
     def get_task_from_data(self, X, y, categorical_attributes=None):
 
         # initialize task
         return SupervisedTask(
             X=X,
             y=y,
-            scoring=self.scoring,
-            passive_scorings=self.passive_scorings,
+            scoring=self._configured_scoring,
+            passive_scorings=self._configured_passive_scorings,
             categorical_attributes=categorical_attributes,
             task_type=self.task_type,
             timeout_overall=self.timeout_overall,
@@ -204,33 +208,44 @@ class NaiveAutoML:
         self.reset(self.get_task_from_data(X, y, categorical_features))
 
         # choose algorithms
-        self._history = df_results_as = self.algorithm_selector.run(
+        self._history = self.algorithm_selector.run(
             deadline=deadline
         )
-        if isinstance(df_results_as, pd.DataFrame) and len(df_results_as) > 0 and df_results_as.iloc[0]["pipeline"] is not None:
+        relevant_history = self._history[self._history[self.task.scoring["name"]].notna()] if self._history is not None else None
+        if (
+                isinstance(relevant_history, pd.DataFrame) and
+                len(relevant_history) > 0 and
+                relevant_history.iloc[0]["pipeline"] is not None
+        ):
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
             # get candidate descriptor
-            as_result_for_candidate = df_results_as.iloc[0]
+            as_result_for_candidate = relevant_history.iloc[0]
 
-            # tune hyperparameters
-            self.hp_optimizer.reset(
-                task=self.task,
-                config_space=self.algorithm_selector.get_config_space(as_result_for_candidate),
-                history_descriptor_creation_fun=lambda hp_config: self.algorithm_selector.create_history_descriptor(as_result_for_candidate, hp_config),
-                evaluator=self.evaluator
-            )
-            df_results_hpo = self.hp_optimizer.optimize()
-            self._history = pd.concat([self._history, df_results_hpo])
+            if (
+                    deadline is None or
+                    deadline is not None and deadline - time.time() >= as_result_for_candidate["runtime"] + 5
+            ):
+
+                # tune hyperparameters
+                self.hp_optimizer.reset(
+                    task=self.task,
+                    runtime_of_default_config=as_result_for_candidate["runtime"],
+                    config_space=self.algorithm_selector.get_config_space(as_result_for_candidate),
+                    history_descriptor_creation_fun=lambda hp_config: self.algorithm_selector.create_history_descriptor(as_result_for_candidate, hp_config),
+                    evaluator=self.evaluator
+                )
+                df_results_hpo = self.hp_optimizer.optimize(deadline=deadline)
+                self._history = pd.concat([self._history, df_results_hpo], ignore_index=True)
+            else:
+                self.logger.info("No time remaining for hyperparameter optimization.")
 
             # get final pipeline and train it on full data
             self.logger.info("--------------------------------------------------")
             self.logger.info("Search Completed. Building final pipeline.")
             self.logger.info("--------------------------------------------------")
-            if df_results_hpo[self.task.scoring["name"]].max() > as_result_for_candidate[self.task.scoring["name"]]:
-                self._chosen_model = df_results_hpo.sort_values(self.task.scoring["name"])["pipeline"][-1]
-            else:
-                self._chosen_model = as_result_for_candidate["pipeline"]
+            best_configuration = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
+            self._chosen_model = best_configuration["pipeline"]
             self.logger.info(self._chosen_model)
             self.logger.info("Now fitting the pipeline with all given data.")
 
@@ -248,16 +263,12 @@ class NaiveAutoML:
                 "Provide a pipeline object or a history index to recover a model!"
             )
         if pl is None:
-            pl = self._history.iloc[history_index]["pl_skeleton"]
-            fitter = self._history.iloc[history_index]["fitter"]
-            fitter.fit(pl, self.task.X, self.task.y)
-            return pl
-        else:
-            pl.fit(self.task.X, self.task.y)
-            return pl
+            pl = self._history.iloc[history_index]["pipeline"]
+        pl.fit(self.task.X, self.task.y)
+        return pl
 
     def predict(self, X):
-        return self.pl.predict(X)
+        return self._chosen_model.predict(X)
 
     def predict_proba(self, X):
-        return self.pl.predict_proba(X)
+        return self._chosen_model.predict_proba(X)
