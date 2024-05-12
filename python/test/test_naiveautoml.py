@@ -57,7 +57,7 @@ class TestNaiveAutoML(unittest.TestCase):
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
-        log_level = logging.WARN
+        log_level = logging.INFO
 
         # configure naml logger (by default set to WARN, change it to DEBUG if tests fail)
         naml_logger = logging.getLogger("naml")
@@ -138,7 +138,6 @@ class TestNaiveAutoML(unittest.TestCase):
     @parameterized.expand([
         (61,),   # iris. Quick check for classification
         (531,),  # boston housing. Quick check for regression
-        (6,),    # letter. Very important because it has many classes
         (188,),  # eucalyptus. Very important because has both missing values and categorical attributes
     ])
     def test_core_functionality(self, openmlid):
@@ -149,7 +148,7 @@ class TestNaiveAutoML(unittest.TestCase):
             timeout_overall=60,
             timeout_candidate=5,
             max_hpo_iterations=2,
-            #evaluation_fun=evaluate_randomly,
+            evaluation_fun=evaluate_randomly,
             show_progress=True,
             raise_errors=False
         )
@@ -311,8 +310,9 @@ class TestNaiveAutoML(unittest.TestCase):
     '''
 
     @parameterized.expand([
-            (61, 30, 0.9),  # on a fast machine, iris can be executed in 10s, but on slow machines it takes longer
-            (188, 60, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
+            (61, 30, 10, 0.9),  # on a fast machine, iris can be executed in 10s, but on slow machines it takes longer
+            (6, 300, 30, 0.96),  # letter
+            (188, 60, 10, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
             #(1468, 120, 0.94),
@@ -324,7 +324,7 @@ class TestNaiveAutoML(unittest.TestCase):
             #(4134, 400, 0.79),
             
         ])
-    def test_naml_results_classification(self, openmlid, exp_runtime_per_seed, exp_result):
+    def test_naml_results_classification(self, openmlid, exp_runtime_per_seed, timeout_candidate, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
 
@@ -341,7 +341,7 @@ class TestNaiveAutoML(unittest.TestCase):
             start = time.time()
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
-                timeout_candidate=10,
+                timeout_candidate=timeout_candidate,
                 max_hpo_iterations=5,
                 show_progress=True
             )
@@ -355,7 +355,7 @@ class TestNaiveAutoML(unittest.TestCase):
             y_hat = naml.predict(X_test)
             score = sklearn.metrics.accuracy_score(y_test, y_hat)
             scores.append(score)
-            self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
+            self.logger.info(f"finished test on seed {seed}. Test score for this run is {score}")
             
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))

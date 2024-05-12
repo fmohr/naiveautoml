@@ -252,22 +252,23 @@ class NaiveAutoML:
             while not successful_training:
                 try:
                     best_configuration = relevant_history.sort_values(self.task.scoring["name"]).iloc[-offset]
+                    self._chosen_model = best_configuration["pipeline"]
+                    self.logger.info(self._chosen_model)
+                    self.logger.info("Now fitting the pipeline with all given data.")
+
+                    # fit the best model
+                    self._chosen_model.fit(X, y)
                     successful_training = True
                 except KeyboardInterrupt:
                     raise
-                except Exception as e:
+                except:
+                    exception = traceback.format_exc()
                     self.logger.warning(
                         f"There was an issue with training the best final pipeline, training the next best. "
-                        f"The exception was {traceback.format_exc(e)}"
+                        f"The exception was {exception}"
 
                     )
                 offset += 1
-            self._chosen_model = best_configuration["pipeline"]
-            self.logger.info(self._chosen_model)
-            self.logger.info("Now fitting the pipeline with all given data.")
-
-            # fit the best model
-            self._chosen_model.fit(X, y)
 
         else:
             self.logger.info("No model was chosen in first phase, so there is nothing to return for me ...")
