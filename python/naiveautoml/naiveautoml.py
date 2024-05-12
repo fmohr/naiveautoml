@@ -218,7 +218,7 @@ class NaiveAutoML:
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
             # get candidate descriptor
-            as_result_for_candidate = relevant_history.iloc[0]
+            as_result_for_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
 
             if (
                     deadline is None or

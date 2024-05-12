@@ -35,8 +35,9 @@ def get_dataset(openmlid, as_numpy = True):
 
 
 def evaluate_randomly(pl, X, y, scoring_functions):
+    rs = np.random.RandomState()
     return (
-        {s["name"]: np.random.random() for s in scoring_functions},  # scores
+        {s["name"]: rs.random() for s in scoring_functions},  # scores
         {s["name"]: {} for s in scoring_functions}  # evaluation reports
     )
 
@@ -197,7 +198,9 @@ class TestNaiveAutoML(unittest.TestCase):
 
     def test_constant_algorithms_in_hpo_phase(self):
         """
-        This function checks that the algorithms are not changed during the HPO phase.
+        This function checks two things:
+        1. that the algorithms are not changed during the HPO phase.
+        2. that the algorithm pairing is the one that was best in phase 1.
 
         :return:
         """
@@ -207,17 +210,37 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(61)
 
         # run naml
+        np.random.seed(round(time.time()))
         naml = naiveautoml.NaiveAutoML(
             logger_name="naml",
             timeout_overall=60,
             max_hpo_iterations=10,
-            show_progress=True
+            show_progress=True,
+            evaluation_fun=evaluate_randomly
         )
         naml.fit(X, y)
+        print(naml.history[["learner_class", "neg_log_loss"]])
+
+        # check that there is only one combination of algorithms in the HPO phase
         history = naml.history.iloc[naml.steps_after_which_algorithm_selection_was_completed:]
-        self.assertTrue(len(pd.unique(history["learner_class"])) <= 2)
-        self.assertTrue(len(pd.unique(history["data-pre-processor_class"])) <= 2)
-        self.assertTrue(len(pd.unique(history["feature-pre-processor_class"])) <= 2)
+        self.assertTrue(len(pd.unique(history["learner_class"])) == 1)
+        self.assertTrue(len(pd.unique(history["data-pre-processor_class"])) == 1)
+        self.assertTrue(len(pd.unique(history["feature-pre-processor_class"])) == 1)
+
+        # get best solution from phase 1
+        phase_1_solutions = naml.history.iloc[:naml.steps_after_which_algorithm_selection_was_completed]
+        phase_1_solutions = phase_1_solutions[phase_1_solutions[naml.task.scoring["name"]].notna()]
+        best_solution_in_phase_1 = phase_1_solutions.sort_values(naml.task.scoring["name"]).iloc[-1]
+
+        for step in ["data-pre-processor", "feature-pre-processor", "learner"]:
+            field = f"{step}_class"
+            class_in_phase1 = best_solution_in_phase_1[field]
+            class_in_phase2 = pd.unique(history[field])[0]
+            self.assertEquals(
+                class_in_phase1,
+                class_in_phase2,
+                f"Choice for {step} should conicide but is {class_in_phase1} in AS phase and {class_in_phase2} in HPO."
+            )
         
         
     """
@@ -275,7 +298,7 @@ class TestNaiveAutoML(unittest.TestCase):
             start = time.time()
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
-                #timeout_candidate=3,
+                timeout_candidate=10,
                 max_hpo_iterations=5,
                 show_progress=True
             )
@@ -345,10 +368,6 @@ class TestNaiveAutoML(unittest.TestCase):
         self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
         self.assertTrue(score_mean <= exp_result, msg=f"Returned solution was bad. Expected was at most {exp_result} but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
-
-        
-        
-        
         
     @parameterized.expand([
             (61, 30, 0.9),
@@ -382,7 +401,7 @@ class TestNaiveAutoML(unittest.TestCase):
             "needs_proba": False,
             "needs_threshold": False
         }
-        scorer = sklearn.metrics.make_scorer(**{k:v for k, v in scoring1.items() if k != "name"})
+        scorer = sklearn.metrics.make_scorer(**{k: v for k, v in scoring1.items() if k != "name"})
 
         # run naml
         scores = []
@@ -418,12 +437,10 @@ class TestNaiveAutoML(unittest.TestCase):
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
         score_mean = np.round(np.mean(scores), 2)
-        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
-        self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad. Expected was at least {exp_result} but true avg score was {score_mean}")
+        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded on {openmlid}. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
+        self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad on {openmlid}. Expected was at least {exp_result} but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
-        
-        
-        
+
     @parameterized.expand([
             (61, 30, 0.9),
             #(188, 60, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
@@ -483,7 +500,6 @@ class TestNaiveAutoML(unittest.TestCase):
         self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
         self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad. Expected was at least {exp_result} but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
-
 
     @parameterized.expand([
         (61, 30, 0.9),
@@ -583,7 +599,8 @@ class TestNaiveAutoML(unittest.TestCase):
             naml = naiveautoml.NaiveAutoML(
                 task_type=task_type,
                 scoring=scoring,
-                timeout_candidate=2
+                timeout_candidate=2,
+                evaluation_fun="mccv_1"
             )
             task = naml.get_task_from_data(X, y, None)
             naml.reset(task)
