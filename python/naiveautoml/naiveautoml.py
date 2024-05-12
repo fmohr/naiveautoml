@@ -261,7 +261,7 @@ class NaiveAutoML:
                     successful_training = True
                 except KeyboardInterrupt:
                     raise
-                except:
+                except Exception:
                     exception = traceback.format_exc()
                     self.logger.warning(
                         f"There was an issue with training the best final pipeline, training the next best. "
