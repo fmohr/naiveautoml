@@ -149,12 +149,57 @@ class TestNaiveAutoML(unittest.TestCase):
             timeout_overall=60,
             timeout_candidate=5,
             max_hpo_iterations=2,
+            #evaluation_fun=evaluate_randomly,
             show_progress=True,
             raise_errors=False
         )
         naml.fit(X, y)
         self.assertTrue(len(naml.leaderboard) > 0)
         self.logger.info(f"Finished test for core functionality on {openmlid}")
+
+    @parameterized.expand([
+        (61, 15),
+        (188, 25)  # eucalyptus. Very important because has both missing values and categorical attributes
+    ])
+    def test_timeout_adherence(self, openmlid, timeout):
+        X, y = get_dataset(openmlid)
+        self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
+
+        # run naml
+        scores = []
+        runtimes = []
+        for seed in range(1, self.num_seeds + 1):
+            # create split
+            self.logger.debug(f"Running test on seed {seed}/{self.num_seeds}")
+            X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y)
+
+            # run naml
+            start = time.time()
+            naml = naiveautoml.NaiveAutoML(
+                logger_name="naml",
+                timeout_overall=timeout,
+                max_hpo_iterations=50,
+                show_progress=True
+            )
+            naml.fit(X_train, y_train)
+            end = time.time()
+            runtime = end - start
+            runtimes.append(runtime)
+
+            # compute test performance
+            self.logger.debug(
+                f"finished training on seed {seed} after {int(np.round(runtime))}s. Now computing performance of solution.")
+            y_hat = naml.predict(X_test)
+            score = sklearn.metrics.accuracy_score(y_test, y_hat)
+            scores.append(score)
+            self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
+
+        # check conditions
+        runtime_mean = int(np.round(np.mean(runtimes)))
+        self.assertTrue(runtime_mean <= timeout,
+                        msg=f"Permitted runtime exceeded on dataset {openmlid}. Runtime had to be less than {timeout}s but true runtime was {runtime_mean}")
+        self.logger.info(
+            f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s")
 
     def test_recoverability_of_pipelines(self):
         openmlid = 61
@@ -266,7 +311,7 @@ class TestNaiveAutoML(unittest.TestCase):
     '''
 
     @parameterized.expand([
-            (61, 5, 0.9),
+            (61, 15, 0.9),
             (188, 50, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -282,8 +327,6 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_naml_results_classification(self, openmlid, exp_runtime_per_seed, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
-
-        exp_runtime = self.num_seeds * exp_runtime_per_seed
 
         # run naml
         scores = []
@@ -317,7 +360,7 @@ class TestNaiveAutoML(unittest.TestCase):
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
         score_mean = np.round(np.mean(scores), 2)
-        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded on dataset {openmlid}. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
+        self.assertTrue(runtime_mean <= exp_runtime_per_seed, msg=f"Permitted runtime exceeded on dataset {openmlid}. Expected was {exp_runtime_per_seed}s but true runtime was {runtime_mean}")
         self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad on dataset {openmlid}. Expected was at least {exp_result}s but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
         
@@ -365,8 +408,8 @@ class TestNaiveAutoML(unittest.TestCase):
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
         score_mean = np.round(np.mean(scores), 2)
-        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
-        self.assertTrue(score_mean <= exp_result, msg=f"Returned solution was bad. Expected was at most {exp_result} but true avg score was {score_mean}")
+        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded on dataset {openmlid}. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
+        self.assertTrue(score_mean <= exp_result, msg=f"Returned solution was bad on dataset {openmlid}. Expected was at most {exp_result} but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
         
     @parameterized.expand([

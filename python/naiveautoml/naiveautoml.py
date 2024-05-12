@@ -1,4 +1,6 @@
 import logging
+import traceback
+
 import pandas as pd
 import time
 
@@ -218,20 +220,20 @@ class NaiveAutoML:
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
             # get candidate descriptor
-            as_result_for_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
+            as_result_for_best_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
 
             if (
                     deadline is None or
-                    deadline is not None and deadline - time.time() >= as_result_for_candidate["runtime"] + 5
+                    deadline is not None and deadline - time.time() >= as_result_for_best_candidate["runtime"] + 5
             ):
 
                 # tune hyperparameters
                 self.hp_optimizer.reset(
                     task=self.task,
-                    runtime_of_default_config=as_result_for_candidate["runtime"],
-                    config_space=self.algorithm_selector.get_config_space(as_result_for_candidate),
+                    runtime_of_default_config=as_result_for_best_candidate["runtime"],
+                    config_space=self.algorithm_selector.get_config_space(as_result_for_best_candidate),
                     history_descriptor_creation_fun=lambda hp_config: self.algorithm_selector.create_history_descriptor(
-                        as_result_for_candidate,
+                        as_result_for_best_candidate,
                         hp_config
                     ),
                     evaluator=self.evaluator
@@ -245,7 +247,21 @@ class NaiveAutoML:
             self.logger.info("--------------------------------------------------")
             self.logger.info("Search Completed. Building final pipeline.")
             self.logger.info("--------------------------------------------------")
-            best_configuration = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
+            offset = 1
+            successful_training = False
+            while not successful_training:
+                try:
+                    best_configuration = relevant_history.sort_values(self.task.scoring["name"]).iloc[-offset]
+                    successful_training = True
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    self.logger.warning(
+                        f"There was an issue with training the best final pipeline, training the next best. "
+                        f"The exception was {traceback.format_exc(e)}"
+
+                    )
+                offset += 1
             self._chosen_model = best_configuration["pipeline"]
             self.logger.info(self._chosen_model)
             self.logger.info("Now fitting the pipeline with all given data.")
