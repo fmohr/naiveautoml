@@ -10,6 +10,7 @@ import openml
 import pandas as pd
 
 from typing import Callable
+import gc
 
 
 def get_dataset(openmlid, as_numpy = True):
@@ -311,7 +312,7 @@ class TestNaiveAutoML(unittest.TestCase):
 
     @parameterized.expand([
             (61, 30, 10, 0.9),  # on a fast machine, iris can be executed in 10s, but on slow machines it takes longer
-            (6, 300, 30, 0.96),  # letter
+            (6, 300, 20, 0.96),  # letter
             (188, 60, 10, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -356,6 +357,9 @@ class TestNaiveAutoML(unittest.TestCase):
             score = sklearn.metrics.accuracy_score(y_test, y_hat)
             scores.append(score)
             self.logger.info(f"finished test on seed {seed}. Test score for this run is {score}")
+
+            del naml
+            gc.collect()
             
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))

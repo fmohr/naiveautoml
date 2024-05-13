@@ -917,7 +917,8 @@ def is_pipeline_forbidden(task, pl):
             sklearn.preprocessing.RobustScaler,
             sklearn.preprocessing.StandardScaler,
             sklearn.preprocessing.MinMaxScaler,
-            sklearn.preprocessing.QuantileTransformer
+            sklearn.preprocessing.QuantileTransformer,
+            sklearn.preprocessing.PowerTransformer
         ]:
             return True  # scaling has no effect onf tree-based classifiers
 

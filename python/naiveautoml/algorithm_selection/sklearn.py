@@ -1,3 +1,5 @@
+import sklearn.svm
+
 from .._interfaces import AlgorithmSelector, SupervisedTask
 
 # core stuff
@@ -174,16 +176,19 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                 pl = self.get_pipeline_for_decision_in_step(step_name, comp, self.task.X, self.task.y, decisions)
 
                 eval_start_time = time.time()
-                if is_pipeline_forbidden(self.task, pl):
+                if (
+                        is_pipeline_forbidden(self.task, pl) or
+                        (self.is_timeout_required(pl) and self.is_pl_prohibited_for_timeout(pl))
+                ):
                     self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
                     scores = {scoring["name"]: np.nan for scoring in [self.task.scoring] + self.task.passive_scorings}
                     self.evaluator.tellEvaluation(pl, [scores[self.task.scoring["name"]]], None, time.time())
                     status, scores, evaluation_report, exception = "avoided", scores, None, None
                 else:
-                    if self.task.timeout_candidate is None:
-                        timeout = None
-                    else:
+                    if self.is_timeout_required(pl) and self.task.timeout_candidate is not None:
                         timeout = min(self.task.timeout_candidate, remaining_time if deadline is not None else 10 ** 10)
+                    else:
+                        timeout = None
                     status, scores, evaluation_report, exception = self.evaluator.evaluate(pl, timeout)
 
                 runtime = time.time() - eval_start_time
@@ -411,6 +416,33 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             )
         except Exception:
             raise
+
+    def is_pl_prohibited_for_timeout(self, pl):
+        learner = pl["learner"]
+        if (
+                isinstance(learner, sklearn.discriminant_analysis.LinearDiscriminantAnalysis) or
+                isinstance(learner, sklearn.neural_network.MLPClassifier) or
+                isinstance(learner, sklearn.neural_network.MLPRegressor) or
+                isinstance(learner, sklearn.ensemble.HistGradientBoostingRegressor) or
+                isinstance(learner, sklearn.ensemble.HistGradientBoostingClassifier)
+        ):
+            return True
+        return False
+
+    def is_timeout_required(self, pl):
+        learner = pl["learner"]
+        if isinstance(learner, sklearn.svm.SVC) or isinstance(learner, sklearn.svm.LinearSVC):
+            return True
+        if "feature-pre-processor" in [e[0] for e in pl.steps]:
+            feature_pp = [e[1] for e in pl.steps if e[0] == "feature-pre-processor"][0]
+            if (
+                    isinstance(feature_pp, sklearn.decomposition.KernelPCA) or
+                    isinstance(feature_pp, sklearn.kernel_approximation.RBFSampler) or
+                    isinstance(feature_pp, sklearn.kernel_approximation.Nystroem) or
+                    isinstance(feature_pp, sklearn.preprocessing.PolynomialFeatures)
+            ):
+                return True
+        return False
 
     def get_standard_learner_instance(self, X, y):
         return self.standard_classifier() if self.inferred_task_type == "classification" else self.standard_regressor()
