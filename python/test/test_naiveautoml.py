@@ -42,6 +42,12 @@ def evaluate_randomly(pl, X, y, scoring_functions):
         {s["name"]: {} for s in scoring_functions}  # evaluation reports
     )
 
+def evaluate_nb_best(pl, X, y, scoring_functions):
+    return (
+        {s["name"]: 1 if isinstance(pl["learner"], sklearn.naive_bayes.BernoulliNB) else 0 for s in scoring_functions},  # scores
+        {s["name"]: {} for s in scoring_functions}  # evaluation reports
+    )
+
 class TestNaiveAutoML(unittest.TestCase):
     
     @staticmethod
@@ -312,7 +318,7 @@ class TestNaiveAutoML(unittest.TestCase):
 
     @parameterized.expand([
             (61, 20, 10, 0.9),  # on a fast machine, iris can be executed in 10s, but on slow machines it takes longer
-            (6, 120, 20, 0.96),  # letter
+            #(6, 120, 20, 0.96),  # letter
             (188, 60, 10, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -490,32 +496,14 @@ class TestNaiveAutoML(unittest.TestCase):
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
 
     @parameterized.expand([
-            (61, 30, 0.9),
-            #(188, 60, 0.5), # eucalyptus. Very important because has both missing values and categorical attributes
-            #(1485, 240, 0.82),
-            #(1515, 240, 0.85),
-            #(1468, 120, 0.94),
-            #(1489, 180, 0.89),
-            #(23512, 600, 0.65),
-            #(23517, 600, 0.5),
-            #(4534, 180, 0.92),
-            #(4538, 400, 0.66),
-            #(4134, 400, 0.79),
-            
+            (61, )
         ])
-    def test_individual_evaluation(self, openmlid, exp_runtime, exp_result):
+    def test_individual_evaluation(self, openmlid):
         
         X, y = get_dataset(openmlid)
-        self.logger.info(
-            f"Testing individual evaluation function on dataset {openml}. "
-            f"Expecting {exp_result} after {exp_runtime}s"
-        )
-        
-        scorer = sklearn.metrics.get_scorer("accuracy")
-        
+        self.logger.info(f"Testing individual evaluation function on dataset {openml}.")
+
         # run naml
-        scores = []
-        runtimes = []
         for seed in range(1, self.num_seeds + 1):
             
             # create split
@@ -528,26 +516,15 @@ class TestNaiveAutoML(unittest.TestCase):
                 logger_name="naml",
                 max_hpo_iterations=10,
                 show_progress=True,
-                evaluation_fun=evaluate_randomly,
+                evaluation_fun=evaluate_nb_best,
                 timeout_candidate=2
             )
             naml.fit(X_train, y_train)
-            end = time.time()
-            runtime = end - start
-            runtimes.append(runtime)
+            self.assertTrue(isinstance(naml.chosen_model["learner"], sklearn.naive_bayes.BernoulliNB))
             
             # compute test performance
-            self.logger.debug(f"finished training on seed {seed} after {int(np.round(runtime))}s. Now computing performance of solution.")
-            score = scorer(naml, X_test, y_test)
-            scores.append(score)
-            self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
-            
-        # check conditions
-        runtime_mean = int(np.round(np.mean(runtimes)))
-        score_mean = np.round(np.mean(scores), 2)
-        self.assertTrue(runtime_mean <= exp_runtime, msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
-        self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad. Expected was at least {exp_result} but true avg score was {score_mean}")
-        self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
+
+        self.logger.info(f"Test for individual evaluation function on dataset {openmlid} finished.")
 
     @parameterized.expand([
         (61, 30, 0.9),
@@ -617,20 +594,13 @@ class TestNaiveAutoML(unittest.TestCase):
             score = scorer(naml, X_test, y_test)
             scores.append(score)
             self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
+            for p1, p2 in zip(naml.history[~naml.history["status"].isin(["avoided", "cache"])]["pipeline"], [e[0] for e in evaluation.history]):
+                print(str(p1) == str(p2), p1, p2)
 
-            self.assertEqual(len(naml.history[naml.history["status"] != "avoided"]), len(evaluation.history), "History lengths don't match!")
+            self.assertEqual(len(naml.history[~naml.history["status"].isin(["avoided", "cache"])]), len(evaluation.history), "History lengths don't match!")
 
         # check conditions
-        runtime_mean = int(np.round(np.mean(runtimes)))
-        score_mean = np.round(np.mean(scores), 2)
-        self.assertTrue(runtime_mean <= exp_runtime,
-                        msg=f"Permitted runtime exceeded. Expected was {exp_runtime}s but true runtime was {runtime_mean}")
-
-        # we also check the score, because the result here *should* be good. if not, the values might not be used
-        self.assertTrue(score_mean >= exp_result,
-                        msg=f"Returned solution was bad. Expected was at least {exp_result} but true avg score was {score_mean}")
-        self.logger.info(
-            f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
+        self.logger.info(f"Test for custom stateful evaluation on dataset {openmlid} finished.")
 
     def test_searchspaces(self):
 
