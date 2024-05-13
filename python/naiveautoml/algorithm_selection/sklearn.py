@@ -439,7 +439,8 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                     isinstance(feature_pp, sklearn.decomposition.KernelPCA) or
                     isinstance(feature_pp, sklearn.kernel_approximation.RBFSampler) or
                     isinstance(feature_pp, sklearn.kernel_approximation.Nystroem) or
-                    isinstance(feature_pp, sklearn.preprocessing.PolynomialFeatures)
+                    isinstance(feature_pp, sklearn.preprocessing.PolynomialFeatures) or
+                    isinstance(feature_pp, sklearn.cluster.FeatureAgglomeration)
             ):
                 return True
         return False

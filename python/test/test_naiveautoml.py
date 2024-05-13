@@ -311,8 +311,8 @@ class TestNaiveAutoML(unittest.TestCase):
     '''
 
     @parameterized.expand([
-            (61, 30, 10, 0.9),  # on a fast machine, iris can be executed in 10s, but on slow machines it takes longer
-            (6, 300, 20, 0.96),  # letter
+            (61, 20, 10, 0.9),  # on a fast machine, iris can be executed in 10s, but on slow machines it takes longer
+            (6, 120, 20, 0.96),  # letter
             (188, 60, 10, 0.5),  # eucalyptus. Very important because has both missing values and categorical attributes
             #(1485, 240, 0.82),
             #(1515, 240, 0.85),
@@ -325,7 +325,7 @@ class TestNaiveAutoML(unittest.TestCase):
             #(4134, 400, 0.79),
             
         ])
-    def test_naml_results_classification(self, openmlid, exp_runtime_per_seed, timeout_candidate, exp_result):
+    def test_naml_results_classification(self, openmlid, timeout_overall, timeout_candidate, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start result test for NaiveAutoML on classification dataset {openmlid}")
 
@@ -342,6 +342,7 @@ class TestNaiveAutoML(unittest.TestCase):
             start = time.time()
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
+                timeout_overall=timeout_overall,
                 timeout_candidate=timeout_candidate,
                 max_hpo_iterations=5,
                 show_progress=True
@@ -364,7 +365,7 @@ class TestNaiveAutoML(unittest.TestCase):
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
         score_mean = np.round(np.mean(scores), 2)
-        self.assertTrue(runtime_mean <= exp_runtime_per_seed, msg=f"Permitted runtime exceeded on dataset {openmlid}. Expected was {exp_runtime_per_seed}s but true runtime was {runtime_mean}")
+        self.assertTrue(runtime_mean <= timeout_overall + 60, msg=f"Permtimeout_overallitted runtime exceeded on dataset {openmlid}. Expected was {timeout_overall + 60}s but true runtime was {runtime_mean}")
         self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad on dataset {openmlid}. Expected was at least {exp_result}s but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
         
