@@ -1038,6 +1038,25 @@
                 }
             },
             {
+                "class": "sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "reg_param",
+                            "type": "uniform_float",
+                            "log": false,
+                            "lower": 0.0,
+                            "upper": 1.0,
+                            "default": 0.0
+                        }
+                    ],
+                    "conditions": [],
+                    "forbiddens": [],
+                    "python_module_version": "0.4.20",
+                    "json_format_version": 0.2
+                }
+            },
+            {
                 "class": "sklearn.svm._classes.SVC",
                 "params": {
                     "hyperparameters": [
@@ -1419,25 +1438,6 @@
                             ],
                             "default": "True",
                             "probabilities": null
-                        }
-                    ],
-                    "conditions": [],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
-                "class": "sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis",
-                "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "reg_param",
-                            "type": "uniform_float",
-                            "log": false,
-                            "lower": 0.0,
-                            "upper": 1.0,
-                            "default": 0.0
                         }
                     ],
                     "conditions": [],

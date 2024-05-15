@@ -511,73 +511,6 @@
         "name": "learner",
         "components": [
             {
-                "class": "sklearn.tree._classes.DecisionTreeRegressor",
-                "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "criterion",
-                            "type": "categorical",
-                            "choices": [
-                                "poisson",
-                                "friedman_mse",
-                                "absolute_error",
-                                "squared_error"
-                            ],
-                            "default": "squared_error",
-                            "probabilities": null
-                        },
-                        {
-                            "name": "max_depth_factor",
-                            "type": "uniform_float",
-                            "log": false,
-                            "lower": 0.0,
-                            "upper": 2.0,
-                            "default": 0.5
-                        },
-                        {
-                            "name": "max_features",
-                            "type": "constant",
-                            "value": 1.0
-                        },
-                        {
-                            "name": "max_leaf_nodes",
-                            "type": "constant",
-                            "value": "None"
-                        },
-                        {
-                            "name": "min_impurity_decrease",
-                            "type": "constant",
-                            "value": 0.0
-                        },
-                        {
-                            "name": "min_samples_leaf",
-                            "type": "uniform_int",
-                            "log": false,
-                            "lower": 1,
-                            "upper": 20,
-                            "default": 1
-                        },
-                        {
-                            "name": "min_samples_split",
-                            "type": "uniform_int",
-                            "log": false,
-                            "lower": 2,
-                            "upper": 20,
-                            "default": 2
-                        },
-                        {
-                            "name": "min_weight_fraction_leaf",
-                            "type": "constant",
-                            "value": 0.0
-                        }
-                    ],
-                    "conditions": [],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
                 "class": "sklearn.ensemble._forest.ExtraTreesRegressor",
                 "params": {
                     "hyperparameters": [
@@ -732,110 +665,6 @@
                 }
             },
             {
-                "class": "sklearn.linear_model._bayes.ARDRegression",
-                "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "alpha_1",
-                            "type": "uniform_float",
-                            "log": false,
-                            "lower": 1e-10,
-                            "upper": 0.001,
-                            "default": 1e-06
-                        },
-                        {
-                            "name": "alpha_2",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1e-10,
-                            "upper": 0.001,
-                            "default": 1e-06
-                        },
-                        {
-                            "name": "fit_intercept",
-                            "type": "constant",
-                            "value": "True"
-                        },
-                        {
-                            "name": "lambda_1",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1e-10,
-                            "upper": 0.001,
-                            "default": 1e-06
-                        },
-                        {
-                            "name": "lambda_2",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1e-10,
-                            "upper": 0.001,
-                            "default": 1e-06
-                        },
-                        {
-                            "name": "n_iter",
-                            "type": "constant",
-                            "value": 300
-                        },
-                        {
-                            "name": "threshold_lambda",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1000.0,
-                            "upper": 100000.0,
-                            "default": 10000.0
-                        },
-                        {
-                            "name": "tol",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1e-05,
-                            "upper": 0.1,
-                            "default": 0.001
-                        }
-                    ],
-                    "conditions": [],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
-                "class": "sklearn.gaussian_process._gpr.GaussianProcessRegressor",
-                "params": {
-                    "hyperparameters": [
-                        {
-                            "name": "alpha",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1e-14,
-                            "upper": 1.0,
-                            "default": 1e-08
-                        },
-                        {
-                            "name": "thetaL",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1e-10,
-                            "upper": 0.001,
-                            "default": 1e-06
-                        },
-                        {
-                            "name": "thetaU",
-                            "type": "uniform_float",
-                            "log": true,
-                            "lower": 1.0,
-                            "upper": 100000.0,
-                            "default": 100000.0
-                        }
-                    ],
-                    "conditions": [],
-                    "forbiddens": [],
-                    "python_module_version": "0.4.20",
-                    "json_format_version": 0.2
-                }
-            },
-            {
                 "class": "sklearn.ensemble._hist_gradient_boosting.gradient_boosting.HistGradientBoostingRegressor",
                 "params": {
                     "hyperparameters": [
@@ -963,6 +792,177 @@
                             "value": "quantile"
                         }
                     ],
+                    "forbiddens": [],
+                    "python_module_version": "0.4.20",
+                    "json_format_version": 0.2
+                }
+            },
+            {
+                "class": "sklearn.tree._classes.DecisionTreeRegressor",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "criterion",
+                            "type": "categorical",
+                            "choices": [
+                                "poisson",
+                                "friedman_mse",
+                                "absolute_error",
+                                "squared_error"
+                            ],
+                            "default": "squared_error",
+                            "probabilities": null
+                        },
+                        {
+                            "name": "max_depth_factor",
+                            "type": "uniform_float",
+                            "log": false,
+                            "lower": 0.0,
+                            "upper": 2.0,
+                            "default": 0.5
+                        },
+                        {
+                            "name": "max_features",
+                            "type": "constant",
+                            "value": 1.0
+                        },
+                        {
+                            "name": "max_leaf_nodes",
+                            "type": "constant",
+                            "value": "None"
+                        },
+                        {
+                            "name": "min_impurity_decrease",
+                            "type": "constant",
+                            "value": 0.0
+                        },
+                        {
+                            "name": "min_samples_leaf",
+                            "type": "uniform_int",
+                            "log": false,
+                            "lower": 1,
+                            "upper": 20,
+                            "default": 1
+                        },
+                        {
+                            "name": "min_samples_split",
+                            "type": "uniform_int",
+                            "log": false,
+                            "lower": 2,
+                            "upper": 20,
+                            "default": 2
+                        },
+                        {
+                            "name": "min_weight_fraction_leaf",
+                            "type": "constant",
+                            "value": 0.0
+                        }
+                    ],
+                    "conditions": [],
+                    "forbiddens": [],
+                    "python_module_version": "0.4.20",
+                    "json_format_version": 0.2
+                }
+            },
+            {
+                "class": "sklearn.linear_model._bayes.ARDRegression",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "alpha_1",
+                            "type": "uniform_float",
+                            "log": false,
+                            "lower": 1e-10,
+                            "upper": 0.001,
+                            "default": 1e-06
+                        },
+                        {
+                            "name": "alpha_2",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1e-10,
+                            "upper": 0.001,
+                            "default": 1e-06
+                        },
+                        {
+                            "name": "fit_intercept",
+                            "type": "constant",
+                            "value": "True"
+                        },
+                        {
+                            "name": "lambda_1",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1e-10,
+                            "upper": 0.001,
+                            "default": 1e-06
+                        },
+                        {
+                            "name": "lambda_2",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1e-10,
+                            "upper": 0.001,
+                            "default": 1e-06
+                        },
+                        {
+                            "name": "n_iter",
+                            "type": "constant",
+                            "value": 300
+                        },
+                        {
+                            "name": "threshold_lambda",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1000.0,
+                            "upper": 100000.0,
+                            "default": 10000.0
+                        },
+                        {
+                            "name": "tol",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1e-05,
+                            "upper": 0.1,
+                            "default": 0.001
+                        }
+                    ],
+                    "conditions": [],
+                    "forbiddens": [],
+                    "python_module_version": "0.4.20",
+                    "json_format_version": 0.2
+                }
+            },
+            {
+                "class": "sklearn.gaussian_process._gpr.GaussianProcessRegressor",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "alpha",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1e-14,
+                            "upper": 1.0,
+                            "default": 1e-08
+                        },
+                        {
+                            "name": "thetaL",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1e-10,
+                            "upper": 0.001,
+                            "default": 1e-06
+                        },
+                        {
+                            "name": "thetaU",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 1.0,
+                            "upper": 100000.0,
+                            "default": 100000.0
+                        }
+                    ],
+                    "conditions": [],
                     "forbiddens": [],
                     "python_module_version": "0.4.20",
                     "json_format_version": 0.2
