@@ -313,17 +313,15 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             step_name = step["name"]
             if base_pl_descriptor[f"{step_name}_class"] is not None:
                 comp = [c for c in step["components"] if c["class"] == base_pl_descriptor[f"{step_name}_class"]][0]
-                steps.append(
-                    (
-                        step_name,
-                        build_estimator(
-                            comp,
-                            hpo_entries[step_name],
-                            X=self.task.X,
-                            y=self.task.y
-                        )
-                    )
+                elem = build_estimator(
+                    comp,
+                    hpo_entries[step_name],
+                    X=self.task.X,
+                    y=self.task.y
                 )
+                if step_name == "learner" and self.task.inferred_task_type == "multilabel-indicator":
+                    elem = BinaryRelevance(elem)
+                steps.append((step_name, elem))
         pl = Pipeline(steps=self.mandatory_pre_processing + steps)
         descriptor["pipeline"] = pl
         return descriptor

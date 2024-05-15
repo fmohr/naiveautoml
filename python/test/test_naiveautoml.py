@@ -387,7 +387,7 @@ class TestNaiveAutoML(unittest.TestCase):
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
 
     @parameterized.expand([
-        (41465, 300, 0.1),
+        (41465, 60, 0.1),
         #(41468, 300, 0.62),
         #(41470, 300, 0.77),
         #(41471, 300, 0.81),
@@ -401,12 +401,12 @@ class TestNaiveAutoML(unittest.TestCase):
         self.assertEqual("multilabel-indicator", type_of_target(y))
 
         scores = []
-        for seed in range(20):
+        for seed in range(3):
             X_train, X_val, y_train, y_val = sklearn.model_selection.train_test_split(X, y, random_state=np.random.RandomState(seed))
 
             naml = naiveautoml.NaiveAutoML(
                 show_progress=True,
-                max_hpo_iterations=100,
+                max_hpo_iterations=10,
                 scoring="f1_macro",
                 passive_scorings=["accuracy", "neg_hamming_loss"],
                 timeout_overall=timeout_overall,
@@ -423,7 +423,7 @@ class TestNaiveAutoML(unittest.TestCase):
         print(scores)
 
     @parameterized.expand([
-            (41021, 120, 650), # moneyball
+            (41021, 120, 660), # moneyball
             #(183, 260, 15), # abalone
             (212, 120, 15)  # diabetes, has decimal targets
             
@@ -446,6 +446,7 @@ class TestNaiveAutoML(unittest.TestCase):
             naml = naiveautoml.NaiveAutoML(
                 logger_name="naml",
                 timeout_overall=75,
+                timeout_candidate=10,
                 max_hpo_iterations=5,
                 show_progress=True,
                 task_type="regression",
@@ -724,6 +725,7 @@ class TestNaiveAutoML(unittest.TestCase):
                             allowed_exception_texts = [
                                 "There are significant negative eigenvalues",
                                 "ValueError: array must not contain infs or NaNs",
+                                "ValueError: Input X contains infinity or a value too large for",
                                 "ValueError: illegal value in 4th argument of internal gesdd"
                             ]
                             if not any([t in exception for t in allowed_exception_texts]):

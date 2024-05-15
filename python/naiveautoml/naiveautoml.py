@@ -153,7 +153,6 @@ class NaiveAutoML:
         return self._chosen_model.clone()
 
     def get_evaluation_pool(self, task):
-        print(f"EVAL FUN: {self.evaluation_fun}")
         return EvaluationPool(
             task=task,
             evaluation_fun=self.evaluation_fun,
