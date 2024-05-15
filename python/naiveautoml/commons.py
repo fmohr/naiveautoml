@@ -8,52 +8,10 @@ import psutil
 import scipy.sparse
 import time
 import pynisher
-import itertools as it
+from .evaluators import LccvValidator, KFold, Mccv
 
 import ConfigSpace
 import traceback
-
-import sklearn.model_selection
-
-
-def get_evaluation_fun(instance, evaluation_fun):
-
-    from .evaluators import\
-        LccvValidator, KFold, Mccv
-
-    is_small_dataset = instance.X.shape[0] < 2000
-    is_medium_dataset = not is_small_dataset and instance.X.shape[0] < 20000
-    is_large_dataset = not (is_small_dataset or is_medium_dataset)
-
-    if evaluation_fun is None:
-        if is_small_dataset:
-            instance.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
-            return Mccv(instance, n_splits=5)
-        elif is_medium_dataset:
-            instance.logger.info("This is a medium dataset, choosing mccv-3 for evaluation")
-            return Mccv(instance, n_splits=3)
-        elif is_large_dataset:
-            instance.logger.info("This is a large dataset, choosing mccv-1 for evaluation")
-            return Mccv(instance, n_splits=1)
-        else:
-            raise ValueError("Invalid case for dataset size!! This should never happen. Please report this as a bug.")
-
-    elif evaluation_fun == "lccv-80":
-        return LccvValidator(instance, 0.8)
-    elif evaluation_fun == "lccv-90":
-        return LccvValidator(instance, 0.9)
-    elif evaluation_fun == "kfold_5":
-        return KFold(instance, n_splits=5)
-    elif evaluation_fun == "kfold_3":
-        return KFold(instance, n_splits=3)
-    elif evaluation_fun == "mccv_1":
-        return Mccv(instance, n_splits=1)
-    elif evaluation_fun == "mccv_3":
-        return Mccv(instance, n_splits=3)
-    elif evaluation_fun == "mccv_5":
-        return Mccv(instance, n_splits=5)
-    else:
-        return evaluation_fun
 
 
 class EvaluationPool:
@@ -67,7 +25,7 @@ class EvaluationPool:
                  use_caching=True,
                  error_treatment="info"
                  ):
-        domains_task_type = ["classification", "regression"]
+        domains_task_type = ["classification", "multilabel-indicator", "regression"]
         if task.inferred_task_type not in domains_task_type:
             raise ValueError(f"task_type must be in {domains_task_type} but is {task.inferred_task_type}.")
         self.task_type = task.inferred_task_type
@@ -106,12 +64,51 @@ class EvaluationPool:
         else:
             self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
             self.side_scores = [task.passive_scorings]
-        self.evaluation_fun = get_evaluation_fun(self, evaluation_fun)
+        self.evaluation_fun = self.get_evaluation_fun(evaluation_fun)
         self.bestScore = -np.inf
         self.tolerance_tuning = tolerance_tuning
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
         self.use_caching = use_caching
+
+    def get_evaluation_fun(self, evaluation_fun):
+
+        task = self.task
+
+        is_small_dataset = task.X.shape[0] < 2000
+        is_medium_dataset = not is_small_dataset and task.X.shape[0] < 20000
+        is_large_dataset = not (is_small_dataset or is_medium_dataset)
+
+        if evaluation_fun is None:
+            if is_small_dataset:
+                self.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
+                return Mccv(task.inferred_task_type, n_splits=5)
+            elif is_medium_dataset:
+                self.logger.info("This is a medium dataset, choosing mccv-3 for evaluation")
+                return Mccv(task.inferred_task_type, n_splits=3)
+            elif is_large_dataset:
+                self.logger.info("This is a large dataset, choosing mccv-1 for evaluation")
+                return Mccv(task.inferred_task_type, n_splits=1)
+            else:
+                raise ValueError(
+                    "Invalid case for dataset size!! This should never happen. Please report this as a bug.")
+
+        elif evaluation_fun == "lccv-80":
+            return LccvValidator(task.inferred_task_type, 0.8)
+        elif evaluation_fun == "lccv-90":
+            return LccvValidator(task.inferred_task_type, 0.9)
+        elif evaluation_fun == "kfold_5":
+            return KFold(task.inferred_task_type, n_splits=5)
+        elif evaluation_fun == "kfold_3":
+            return KFold(task.inferred_task_type, n_splits=3)
+        elif evaluation_fun == "mccv_1":
+            return Mccv(task.inferred_task_type, n_splits=1)
+        elif evaluation_fun == "mccv_3":
+            return Mccv(task.inferred_task_type, n_splits=3)
+        elif evaluation_fun == "mccv_5":
+            return Mccv(task.inferred_task_type, n_splits=5)
+        else:
+            return evaluation_fun
 
     def tellEvaluation(self, pl, scores, evaluation_report, timestamp):
         spl = str(pl)
@@ -120,52 +117,6 @@ class EvaluationPool:
         if score > self.bestScore:
             self.bestScore = score
             self.best_spl = spl
-
-    def cross_validate(self, pl, X, y, scorings, errors="raise"):  # just a wrapper to ease parallelism
-        try:
-            if not isinstance(scorings, list):
-                scorings = [scorings]
-
-            if self.task_type == "classification":
-                splitter = sklearn.model_selection.StratifiedKFold(n_splits=5, random_state=None, shuffle=True)
-            elif self.task_type:
-                splitter = sklearn.model_selection.KFold(n_splits=5, random_state=None, shuffle=True)
-            scores = {scoring["name"]: [] for scoring in scorings}
-            for train_index, test_index in splitter.split(X, y):
-
-                X_train = X.iloc[train_index] if isinstance(X, pd.DataFrame) else X[train_index]
-                y_train = y.iloc[train_index] if isinstance(y, pd.Series) else y[train_index]
-                X_test = X.iloc[test_index] if isinstance(X, pd.DataFrame) else X[test_index]
-                y_test = y.iloc[test_index] if isinstance(y, pd.Series) else y[test_index]
-
-                pl_copy = sklearn.base.clone(pl)
-                pl_copy.fit(X_train, y_train)
-
-                # compute values for each metric
-                for scoring in scorings:
-                    scorer = scoring["fun"]
-                    try:
-                        score = scorer(pl_copy, X_test, y_test)
-                    except KeyboardInterrupt:
-                        raise
-                    except Exception:
-                        score = np.nan
-                        if errors == "message":
-                            self.logger.info(f"Observed exception in validation of pipeline {pl_copy}. Placing nan.")
-                        else:
-                            raise
-
-                    scores[scoring["name"]].append(score)
-            return scores
-        except KeyboardInterrupt:
-            raise
-        except Exception as e:
-            if errors in ["message", "ignore"]:
-                if errors == "message":
-                    self.logger.error(f"Observed an error: {e}")
-                return None
-            else:
-                raise
 
     def evaluate(self, pl, timeout=None):
 
@@ -274,31 +225,3 @@ def get_hyperparameter_space_size(config_space):
         else:
             return np.inf
     return size
-
-
-def get_all_configurations(config_spaces):
-    configs_by_comps = {}
-    for step_name, config_space in config_spaces.items():
-        names = []
-        domains = []
-        for hp in config_space.get_hyperparameters():
-            names.append(hp.name)
-            if isinstance(hp, (
-                    ConfigSpace.hyperparameters.UnParametrizedHyperparameter,
-                    ConfigSpace.hyperparameters.Constant
-            )):
-                domains.append([hp.value])
-
-            if isinstance(hp, ConfigSpace.hyperparameters.CategoricalHyperparameter):
-                domains.append(list(hp.choices))
-            elif isinstance(hp, ConfigSpace.hyperparameters.IntegerHyperparameter):
-                domains.append(list(range(hp.lower, hp.upper + 1)))
-            else:
-                raise TypeError(f"Unsupported hyperparameter type {type(hp)}")
-
-        # compute product
-        configs = []
-        for combo in it.product(*domains):
-            configs.append({name: combo[i] for i, name in enumerate(names)})
-        configs_by_comps[step_name] = configs
-    return configs_by_comps

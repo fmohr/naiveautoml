@@ -9,6 +9,8 @@ import pandas as pd
 import time
 from tqdm import tqdm
 
+from sklearn.utils.multiclass import type_of_target
+
 
 class SupervisedTask:
 
@@ -41,16 +43,27 @@ class SupervisedTask:
 
         # configure scorings
         def prepare_scoring(scoring):
-            return {
-                "name": scoring if isinstance(scoring, str) else scoring["name"],
-                "fun": get_scorer(scoring) if isinstance(scoring, str) else make_scorer(
-                    **{key: val for key, val in scoring.items() if key != "name"})
+            out = {
+                "name": scoring if isinstance(scoring, str) else scoring["name"]
             }
+            if type_of_target(self._y) == "multilabel-indicator":
+                out["fun"] = None
+            else:
+                if isinstance(scoring, str):
+                    out["fun"] = get_scorer(scoring)
+                else:
+                    out["fun"] = make_scorer(**{key: val for key, val in scoring.items() if key != "name"})
+            return out
 
         if scoring is None:
             self.scoring = None
             if self.inferred_task_type == "classification":
                 self.scoring = prepare_scoring("roc_auc" if len(self._labels) == 2 else "neg_log_loss")
+            elif self.inferred_task_type == "multilabel-indicator":
+                self.scoring = {
+                    "name": "f1_macro",
+                    "fun": None
+                }
             else:
                 self.scoring = prepare_scoring("neg_mean_squared_error")
         else:
@@ -116,6 +129,8 @@ class SupervisedTask:
         :param y: the labels of the instances
         :return:
         """
+        if type_of_target(self._y) == "multilabel-indicator":
+            return "multilabel-indicator"
 
         # infer task type
         if isinstance(self.scoring, str):
@@ -179,6 +194,8 @@ class HPOptimizer(ABC):
         self.config_space = None
         self.create_history_descriptor = None
         self.evaluator = None
+        self.is_pipeline_forbidden = None
+        self.is_timeout_required = None
         self._history = None
         self.best_score = None
         self.active = False
@@ -189,13 +206,17 @@ class HPOptimizer(ABC):
               runtime_of_default_config,
               config_space: ConfigurationSpace,
               history_descriptor_creation_fun: Callable,
-              evaluator
+              evaluator: Callable,
+              is_pipeline_forbidden: Callable,
+              is_timeout_required: Callable
               ):
         self.task = task
         self.runtime_of_default_config = runtime_of_default_config
         self.config_space = config_space
         self.create_history_descriptor = history_descriptor_creation_fun
         self.evaluator = evaluator
+        self.is_pipeline_forbidden = is_pipeline_forbidden
+        self.is_timeout_required = is_timeout_required
         self._history = None
         self.best_score = -np.inf
         self.active = True

@@ -153,6 +153,7 @@ class NaiveAutoML:
         return self._chosen_model.clone()
 
     def get_evaluation_pool(self, task):
+        print(f"EVAL FUN: {self.evaluation_fun}")
         return EvaluationPool(
             task=task,
             evaluation_fun=self.evaluation_fun,
@@ -161,7 +162,7 @@ class NaiveAutoML:
 
     def get_task_from_data(self, X, y, categorical_attributes=None):
 
-        # initialize task
+        # initialize taskis_pipeline_forbidden
         return SupervisedTask(
             X=X,
             y=y,
@@ -236,7 +237,9 @@ class NaiveAutoML:
                         as_result_for_best_candidate,
                         hp_config
                     ),
-                    evaluator=self.evaluator
+                    evaluator=self.evaluator,
+                    is_pipeline_forbidden=self.algorithm_selector.is_pipeline_forbidden,
+                    is_timeout_required=self.algorithm_selector.is_timeout_required
                 )
                 df_results_hpo = self.hp_optimizer.optimize(deadline=deadline)
                 self._history = pd.concat([self._history, df_results_hpo], ignore_index=True)

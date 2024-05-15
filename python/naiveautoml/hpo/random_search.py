@@ -30,11 +30,14 @@ class RandomHPO(HPOptimizer):
         candidate_history_entry["time"] = time.time()
         candidate_pipeline = candidate_history_entry["pipeline"]
 
+        # determine whether a timeout is to be applied
+        timeout = self.task.timeout_candidate if self.is_timeout_required(candidate_pipeline) else None
+
         # evaluate configured pipeline
         time_start_eval = time.time()
         status, scores, evaluation_report, exception = self.evaluator.evaluate(
             pl=candidate_pipeline,
-            timeout=self.task.timeout_candidate
+            timeout=timeout
         )
         if not isinstance(scores, dict):
             raise TypeError(f"""

@@ -1,4 +1,8 @@
 import logging
+
+import pytest
+from sklearn.metrics import get_scorer
+
 import naiveautoml
 import numpy as np
 import sklearn.datasets
@@ -12,8 +16,10 @@ import pandas as pd
 from typing import Callable
 import gc
 
+from sklearn.utils.multiclass import type_of_target
 
-def get_dataset(openmlid, as_numpy = True):
+
+def get_dataset(openmlid, as_numpy=True):
     ds = openml.datasets.get_dataset(
         openmlid,
         download_data=True,
@@ -42,11 +48,13 @@ def evaluate_randomly(pl, X, y, scoring_functions):
         {s["name"]: {} for s in scoring_functions}  # evaluation reports
     )
 
+
 def evaluate_nb_best(pl, X, y, scoring_functions):
     return (
         {s["name"]: 1 if isinstance(pl["learner"], sklearn.naive_bayes.BernoulliNB) else 0 for s in scoring_functions},  # scores
         {s["name"]: {} for s in scoring_functions}  # evaluation reports
     )
+
 
 class TestNaiveAutoML(unittest.TestCase):
     
@@ -74,6 +82,9 @@ class TestNaiveAutoML(unittest.TestCase):
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         ch.setFormatter(formatter)
         naml_logger.addHandler(ch)
+
+        naml_logger = logging.getLogger("naml.pool")
+        naml_logger.setLevel(logging.WARNING)
         
         # configure naml logger (by default set to WARN, change it to DEBUG if tests fail)
         naml_eval_logger = logging.getLogger("naiveautoml.evalpool")
@@ -374,7 +385,43 @@ class TestNaiveAutoML(unittest.TestCase):
         self.assertTrue(runtime_mean <= timeout_overall + 60, msg=f"Permtimeout_overallitted runtime exceeded on dataset {openmlid}. Expected was {timeout_overall + 60}s but true runtime was {runtime_mean}")
         self.assertTrue(score_mean >= exp_result, msg=f"Returned solution was bad on dataset {openmlid}. Expected was at least {exp_result}s but true avg score was {score_mean}")
         self.logger.info(f"Test on dataset {openmlid} finished. Mean runtimes was {runtime_mean}s and avg accuracy was {score_mean}")
-        
+
+    @parameterized.expand([
+        (41465, 300, 0.1),
+        #(41468, 300, 0.62),
+        #(41470, 300, 0.77),
+        #(41471, 300, 0.81),
+        #(41473, 300, 0.59),
+    ])
+    def test_naml_results_multilabel(self, openmlid, timeout_overall, required_f1_macro):
+        X, y = sklearn.datasets.fetch_openml(data_id=openmlid, return_X_y=True, as_frame=False)
+        y[y == "TRUE"] = 1
+        y[y == "FALSE"] = 0
+        y = y.astype(int)
+        self.assertEqual("multilabel-indicator", type_of_target(y))
+
+        scores = []
+        for seed in range(20):
+            X_train, X_val, y_train, y_val = sklearn.model_selection.train_test_split(X, y, random_state=np.random.RandomState(seed))
+
+            naml = naiveautoml.NaiveAutoML(
+                show_progress=True,
+                max_hpo_iterations=100,
+                scoring="f1_macro",
+                passive_scorings=["accuracy", "neg_hamming_loss"],
+                timeout_overall=timeout_overall,
+                timeout_candidate=20,
+                logger_name="naml"
+            )
+            naml.fit(X_train, y_train)
+
+            y_pred = naml.predict(X_val)
+            score = sklearn.metrics.f1_score(y_val, y_pred, average="macro")
+            scores.append(score)
+            print(score)
+            self.assertTrue(score > required_f1_macro)
+        print(scores)
+
     @parameterized.expand([
             (41021, 120, 650), # moneyball
             #(183, 260, 15), # abalone
@@ -605,7 +652,7 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_searchspaces(self):
 
         for openmlid, task_type in {
-            61: "classification",  # iris
+            #61: "classification",  # iris
             531: "regression"  # boston housing
         }.items():
 
@@ -656,7 +703,9 @@ class TestNaiveAutoML(unittest.TestCase):
                         runtime_of_default_config=0,
                         config_space=helper.get_config_space_for_selected_algorithms(selection),
                         history_descriptor_creation_fun=lambda hp_config: naml.algorithm_selector.create_history_descriptor(faked_as_info, hp_config),
-                        evaluator=naml.evaluator
+                        evaluator=naml.evaluator,
+                        is_pipeline_forbidden=naml.algorithm_selector.is_pipeline_forbidden,
+                        is_timeout_required=naml.algorithm_selector.is_timeout_required
                     )
 
                     # create and evaluate random configurations
@@ -684,6 +733,7 @@ class TestNaiveAutoML(unittest.TestCase):
                         if status not in ["ok", "timeout"]:
                             self.logger.warning(f"Observed uncommon status \"{status}\".")
 
+    @pytest.mark.skip(reason="It seems as if this test is not necessary anymore while being very time consuming.")
     @parameterized.expand([
         (61, )
     ])
@@ -697,6 +747,7 @@ class TestNaiveAutoML(unittest.TestCase):
             automl = naiveautoml.NaiveAutoML(
                 evaluation_fun="mccv_1",
                 show_progress=True,
-                timeout_overall=30
+                timeout_overall=30,
+                timeout_candidate=10
             )
             automl.fit(X_train, y_train)

@@ -26,8 +26,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import OrdinalEncoder
+from skmultilearn.problem_transform import BinaryRelevance
 
-from ._sklearn_factory import build_estimator, is_pipeline_forbidden
+from ._sklearn_factory import build_estimator
 from ._sklearn_hpo import HPOHelper
 
 
@@ -80,6 +81,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         self.raise_errors = raise_errors
 
         # state variables
+        self.search_space = None
         self.start_time = None
         self.task = None
         self.evaluator = None
@@ -95,9 +97,6 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         self.task = task
         self.evaluator = evaluator
 
-        # encode targets if necessary
-        self.y_encoded = self.substitute_targets(task.y.copy())
-
         # register search space
         task_type = task.inferred_task_type
         self.logger.info(f"Automatically inferred task type: {task_type}")
@@ -108,8 +107,14 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                 which is a list of components with their parameters.
             - if it is a string, a json file with the name of search_space is read in with the same semantics
          '''
+        if task_type in ["classification", "multilabel-indicator"]:
+            searchspace_file = "classification"
+        elif task_type == "regression":
+            searchspace_file = "regression"
+        else:
+            raise ValueError(f"Unsupported task type {task_type}")
         if self._configured_search_space is None or self._configured_search_space == "auto-sklearn":
-            json_str = pkg_resources.read_text('naiveautoml', 'searchspace-' + task_type + '.json')
+            json_str = pkg_resources.read_text('naiveautoml', f'searchspace-{searchspace_file}.json')
             self.search_space = json.loads(json_str)
         else:
             if isinstance(self._configured_search_space, str):
@@ -177,7 +182,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
                 eval_start_time = time.time()
                 if (
-                        is_pipeline_forbidden(self.task, pl) or
+                        self.is_pipeline_forbidden(pl) or
                         (self.is_timeout_required(pl) and self.is_pl_prohibited_for_timeout(pl))
                 ):
                     self.logger.info(f"Preventing evaluation of forbidden pipeline {pl}")
@@ -418,7 +423,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             raise
 
     def is_pl_prohibited_for_timeout(self, pl):
-        learner = pl["learner"]
+        learner = pl["learner"] if self.task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
         if (
                 isinstance(learner, sklearn.discriminant_analysis.LinearDiscriminantAnalysis) or
                 isinstance(learner, sklearn.neural_network.MLPClassifier) or
@@ -430,8 +435,12 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         return False
 
     def is_timeout_required(self, pl):
-        learner = pl["learner"]
-        if isinstance(learner, sklearn.svm.SVC) or isinstance(learner, sklearn.svm.LinearSVC):
+        learner = pl["learner"] if self.task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
+        if (
+                isinstance(learner, sklearn.svm.SVC) or
+                isinstance(learner, sklearn.svm.LinearSVC) or
+                isinstance(learner, sklearn.svm.SVR)
+        ):
             return True
         if "feature-pre-processor" in [e[0] for e in pl.steps]:
             feature_pp = [e[1] for e in pl.steps if e[0] == "feature-pre-processor"][0]
@@ -442,6 +451,98 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                     isinstance(feature_pp, sklearn.preprocessing.PolynomialFeatures) or
                     isinstance(feature_pp, sklearn.cluster.FeatureAgglomeration)
             ):
+                return True
+        return False
+
+    def is_pipeline_forbidden(self, pl):
+
+        if self.is_pl_prohibited_for_timeout(pl) and self.is_timeout_required(pl):
+            return True
+
+        task = self.task
+        learner = pl["learner"] if task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
+
+        # forbid pipelines with SVMs if the main scoring function requires probabilities
+        if learner.__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC]:
+            if task.scoring["fun"] is not None and task.scoring["fun"]._response_method == "predict_proba":
+                return True
+
+        # forbid pipelines with scalers and trees
+        if "data-pre-processor" in [e[0] for e in pl.steps]:
+            if learner.__class__ in [
+                sklearn.tree.DecisionTreeClassifier,
+                sklearn.tree.DecisionTreeRegressor,
+                sklearn.ensemble.ExtraTreesRegressor,
+                sklearn.ensemble.ExtraTreesClassifier,
+                sklearn.ensemble.HistGradientBoostingClassifier,
+                sklearn.ensemble.HistGradientBoostingRegressor,
+                sklearn.ensemble.GradientBoostingClassifier,
+                sklearn.ensemble.RandomForestClassifier,
+                sklearn.ensemble.RandomForestRegressor
+            ] and pl["data-pre-processor"].__class__ in [
+                sklearn.preprocessing.RobustScaler,
+                sklearn.preprocessing.StandardScaler,
+                sklearn.preprocessing.MinMaxScaler,
+                sklearn.preprocessing.QuantileTransformer,
+                sklearn.preprocessing.PowerTransformer
+            ]:
+                return True  # scaling has no effect onf tree-based classifiers
+
+        # certain pipeline combos are generally forbidden
+        forbidden_combos = [
+            {
+                "data-pre-processor": sklearn.preprocessing.PowerTransformer,
+                "feature-pre-processor": sklearn.feature_selection.SelectPercentile
+            },
+            {
+                "data-pre-processor": sklearn.preprocessing.PowerTransformer,
+                "feature-pre-processor": sklearn.feature_selection.GenericUnivariateSelect
+            },
+            {
+                "feature-pre-processor": sklearn.decomposition.FastICA,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            },
+            {
+                "feature-pre-processor": sklearn.decomposition.PCA,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            },
+            {
+                "feature-pre-processor": sklearn.decomposition.KernelPCA,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            },
+            {
+                "feature-pre-processor": sklearn.kernel_approximation.RBFSampler,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            },
+            {
+                "feature-pre-processor": sklearn.kernel_approximation.Nystroem,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            },
+            {
+                "data-pre-processor": sklearn.preprocessing.PowerTransformer,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            },
+            {
+                "data-pre-processor": sklearn.preprocessing.StandardScaler,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            },
+            {
+                "data-pre-processor": sklearn.preprocessing.RobustScaler,
+                "classifier": sklearn.naive_bayes.MultinomialNB
+            }
+        ]
+
+        representation = {}
+        for step_name, obj in pl.steps:
+            representation[step_name] = obj.__class__
+
+        for combo in forbidden_combos:
+            matches = True
+            for key, val in combo.items():
+                if key not in representation or representation[key] != val:
+                    matches = False
+                    break
+            if matches:
                 return True
         return False
 
@@ -460,6 +561,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         config = config_json.read(json.dumps(comp["params"])).get_default_configuration() if comp is not None else None
 
         if self.strictly_naive:  # strictly naive case
+            raise ValueError("The strictly naive case is deprecated!")
 
             # build pipeline to be evaluated here
             if step_name == "learner":
@@ -474,9 +576,20 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             return Pipeline(steps=self.mandatory_pre_processing + steps)
 
         else:  # semi-naive case (consider previous decisions)
-            steps_tmp = [(s[0], build_estimator(s[1], None, X, y)) for s in decisions]
+
+            # encapsulate BR if necessary
+            def get_elem(step_name_inner, class_name):
+                elem = build_estimator(class_name, None, X, y)
+                if step_name_inner == "learner" and self.task.inferred_task_type == "multilabel-indicator":
+                    elem = BinaryRelevance(elem)
+                return elem
+
+            # create pipeline steps
+            steps_tmp = []
+            for s in decisions:
+                steps_tmp.append((s[0], get_elem(s[0], s[1])))
             if comp is not None:
-                steps_tmp.append((step_name, build_estimator(comp, config, X, y)))
+                steps_tmp.append((step_name, get_elem(step_name, comp)))
             steps_ordered = []
             for step_inner in self.search_space:
                 if is_component_defined_in_steps(steps_tmp, step_inner["name"]):

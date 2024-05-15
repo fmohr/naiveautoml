@@ -14,6 +14,7 @@ setup(
           'numpy',
           'pandas',
           'scikit-learn>=1.4',
+          'scikit-multilearn=0.2.0',
           'configspace<0.7.1',
           'scipy',
           'pynisher',
