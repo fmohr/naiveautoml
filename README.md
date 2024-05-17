@@ -1,5 +1,7 @@
 # Naive AutoML
-`naiveautoml` is a tool to find optimal machine learning pipelines for classification (binary, multi-class, or multi-label) and regression tasks.
+`naiveautoml` is a tool to find optimal machine learning pipelines for
+- classification tasks (binary, multi-class, or multi-label) and
+- regression tasks.
 
 Other than most AutoML tools, `naiveautoml` has no (also no implicit) definitions of timeouts. While timeouts can optionally provided, `naiveautoml` will simply stop as soon as it believes that no better pipeline can be found; this can be surprisingly quick.
 
