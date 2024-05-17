@@ -20,6 +20,7 @@ class EarlyDiscardingValidator:
             stopper="lce",
             train_size=0.8,
             repetitions_per_anchor=5,
+            random_state=None
     ):
         self.instance = instance
 
@@ -29,11 +30,13 @@ class EarlyDiscardingValidator:
                 raise ValueError(f"'stopper' must be in {accepted_stoppers} but is {stopper}")
             elif stopper == "lce":
                 self.stopper = LCModelStopper(
-                    max_steps=10**3
+                    max_steps=10**3,
+                    random_state=self.random_state
                 )
             elif stopper == "pfn":
                 self.stopper = LCPFNStopper(
-                    max_steps=10**3
+                    max_steps=10**3,
+                    random_state=self.random_state
                 )
         else:
             self.stopper = stopper
@@ -41,6 +44,7 @@ class EarlyDiscardingValidator:
 
         self.max_anchor = int(train_size * instance.X.shape[0])
         self.scorings = [instance.scoring] + instance.side_scores
+        self.random_state = random_state
 
     def get_subject(self, pl):
         return str(pl)
@@ -83,7 +87,7 @@ class EarlyDiscardingValidator:
                     s_name: [] for s_name in scorings
                 }
 
-                sss = StratifiedShuffleSplit(n_splits=self.repetitions_per_anchor, train_size=budget)
+                sss = StratifiedShuffleSplit(n_splits=self.repetitions_per_anchor, train_size=budget, random_state=self.random_state)
                 for train_index, val_index in sss.split(X, y):
                     pl_copy = sklearn.base.clone(pl)
                     pl_copy.fit(X[train_index], y[train_index])
@@ -128,11 +132,12 @@ class EarlyDiscardingValidator:
 
 class LccvValidator:
 
-    def __init__(self, instance, train_size=0.8, repetitions_per_anchor=5):
+    def __init__(self, instance, train_size=0.8, repetitions_per_anchor=5, random_state=None):
         self.r = -np.inf
         self.instance = instance
         self.train_size = train_size
         self.repetitions_per_anchor = repetitions_per_anchor
+        self.random_state = random_state
 
     def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -150,7 +155,8 @@ class LccvValidator:
                     base_scoring=scorings[0],
                     additional_scorings=scorings[1:],
                     target_anchor=self.train_size,
-                    max_evaluations=self.repetitions_per_anchor
+                    max_evaluations=self.repetitions_per_anchor,
+                    seed=self.random_state
                 )
                 if not np.isnan(score) and score > self.r:
                     self.r = score
@@ -202,9 +208,10 @@ class LccvValidator:
 
 
 class KFold:
-    def __init__(self, instance, n_splits):
+    def __init__(self, instance, n_splits, random_state=None):
         self.instance = instance
         self.n_splits = n_splits
+        self.random_state = random_state
 
     def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -216,11 +223,11 @@ class KFold:
             if self.instance.task_type == "classification":
                 splitter = sklearn.model_selection.StratifiedKFold(
                     n_splits=self.n_splits,
-                    random_state=None,
+                    random_state=self.random_state,
                     shuffle=True
                 )
             elif self.instance.task_type:
-                splitter = sklearn.model_selection.KFold(n_splits=self.n_splits, random_state=None, shuffle=True)
+                splitter = sklearn.model_selection.KFold(n_splits=self.n_splits, random_state=self.random_state, shuffle=True)
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):
 
@@ -269,9 +276,10 @@ class KFold:
 
 
 class Mccv:
-    def __init__(self, instance, n_splits):
+    def __init__(self, instance, n_splits, random_state=None):
         self.instance = instance
         self.n_splits = n_splits
+        self.random_state = random_state
 
     def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -284,13 +292,13 @@ class Mccv:
                 splitter = sklearn.model_selection.StratifiedShuffleSplit(
                     n_splits=self.n_splits,
                     train_size=0.8,
-                    random_state=None
+                    random_state=self.random_state
                 )
             elif self.instance.task_type:
                 splitter = sklearn.model_selection.ShuffleSplit(
                     n_splits=self.n_splits,
                     train_size=0.8,
-                    random_state=None
+                    random_state=self.random_state
                 )
             scores = {get_scoring_name(scoring): [] for scoring in scorings}
             for train_index, test_index in splitter.split(X, y):

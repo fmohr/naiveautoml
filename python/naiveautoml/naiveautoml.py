@@ -55,7 +55,8 @@ class NaiveAutoML:
                  strictly_naive: bool = False,
                  sparse: bool = None,
                  task_type: str = "auto",
-                 raise_errors: bool = False):
+                 raise_errors: bool = False,
+                 random_state = None):
         """
 
         :param search_space:
@@ -109,6 +110,7 @@ class NaiveAutoML:
         self.standard_classifier = standard_classifier
         self.standard_regressor = standard_regressor
         self.raise_errors = raise_errors
+        self.random_state = random_state
 
         # state variables
         self.start_time = None
@@ -198,7 +200,8 @@ class NaiveAutoML:
             scoring=self.scoring,
             side_scores=self.side_scores,
             evaluation_fun=self.evaluation_fun,
-            logger_name=None if self.logger_name is None else self.logger_name + ".pool"
+            logger_name=None if self.logger_name is None else self.logger_name + ".pool",
+            random_state=self.random_state
         )
 
     def get_standard_learner_instance(self, X, y):
@@ -487,7 +490,8 @@ class NaiveAutoML:
             max_time_without_imp=self.max_hpo_time_without_imp,
             max_its_without_imp=self.max_hpo_iterations_without_imp,
             allow_exhaustive_search=(self.max_hpo_iterations is None),
-            logger_name=None if self.logger_name is None else self.logger_name + ".hpo"
+            logger_name=None if self.logger_name is None else self.logger_name + ".hpo",
+            random_state=self.random_state
         )
 
     def tune_parameters(self, X, y):
