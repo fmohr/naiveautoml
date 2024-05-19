@@ -205,11 +205,11 @@ class KFold(SplitBasedEvaluator):
         if task_type in ["classification"]:
             splitter = sklearn.model_selection.StratifiedKFold(
                 n_splits=n_splits,
-                random_state=self.random_state,
+                random_state=random_state,
                 shuffle=True
             )
         elif task_type in ["regression", "multilabel-indicator"]:
-            splitter = sklearn.model_selection.KFold(n_splits=n_splits, random_state=self.random_state, shuffle=True)
+            splitter = sklearn.model_selection.KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
         else:
             raise ValueError(f"Unsupported task type {task_type}")
 
