@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.model_selection import StratifiedShuffleSplit
-from .stoppers._lcmodel_stopper import LCModelStopper
-from .stoppers._lcpfn_stopper import LCPFNStopper
+from naiveautoml.stoppers._lcmodel_stopper import LCModelStopper
+from naiveautoml.stoppers._lcpfn_stopper import LCPFNStopper
 
 
 class LccvValidator:
