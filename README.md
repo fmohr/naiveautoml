@@ -1,4 +1,6 @@
 # Naive AutoML
+![https://github.com/github/docs/actions/workflows/python-publish.yml/badge.svg](https://github.com/fmohr/naiveautoml/actions/workflows/python-publish.yml/badge.svg)
+
 `naiveautoml` is a tool to find optimal machine learning pipelines for
 - classification tasks (binary, multi-class, or multi-label) and
 - regression tasks.
@@ -40,11 +42,12 @@ Want to put a **timeout**? Specify it *in seconds* (should be always bigger than
 ```python
 naml = naiveautoml.NaiveAutoML(timeout_overall=20)
 ```
-The timeout for pipeline evaluations is 10 seconds per default. You can modify this timeout on single pipeline evaluations with
+You can modify the pipeline timeout on single pipeline evaluations with
 
 ```python
 naml = naiveautoml.NaiveAutoML(timeout_candidate=20)
 ```
+*However*, be aware that on many pipelines this time out is *not enforced* since this not safely possible without memory leakage or malfunction.
 
 This can also be **combined** with `max_hpo_iterations`.
 
