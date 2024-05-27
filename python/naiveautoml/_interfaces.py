@@ -244,6 +244,10 @@ class HPOptimizer(ABC):
         df_result = None
         time_for_last_step = self.runtime_of_default_config
         for _ in range(self.task.max_hpo_iterations):
+            if not self.active:
+                self.logger.info("HPO is not active anymore. Stopping.")
+                break
+
             if deadline is not None and deadline - time.time() < time_for_last_step:
                 self.logger.info("Next iteration would probably take more time than the deadline allows. Stopping HPO.")
                 break

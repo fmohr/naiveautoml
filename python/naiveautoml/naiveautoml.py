@@ -5,10 +5,12 @@ import pandas as pd
 import time
 
 # naiveautoml commons
+from ._interfaces import SupervisedTask, HPOptimizer
+from .algorithm_selection.sklearn import SKLearnAlgorithmSelector
+from .hpo.random_search import RandomHPO
 from .commons import EvaluationPool
 
 import numpy as np
-from ._interfaces import SupervisedTask, HPOptimizer
 
 
 class NaiveAutoML:
@@ -64,7 +66,6 @@ class NaiveAutoML:
             if "strictly_naive" not in kwargs_as:
                 kwargs_as["strictly_naive"] = strictly_naive
             if algorithm_selector == "sklearn":
-                from .algorithm_selection.sklearn import SKLearnAlgorithmSelector
                 self.algorithm_selector = SKLearnAlgorithmSelector(
                     show_progress=show_progress,
                     raise_errors=raise_errors,
@@ -83,7 +84,6 @@ class NaiveAutoML:
             accepted_optimizers = ["random"]
             if hp_optimizer not in accepted_optimizers:
                 raise ValueError(f"hp_optimizer if string must be in {accepted_optimizers} but is {hp_optimizer}")
-            from .hpo.random_search import RandomHPO
             self.hp_optimizer = RandomHPO(
                 show_progress=show_progress,
                 logger=self.logger,

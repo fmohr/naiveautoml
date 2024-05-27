@@ -1,4 +1,6 @@
 # Naive AutoML
+![https://github.com/github/docs/actions/workflows/python-publish.yml/badge.svg](https://github.com/fmohr/naiveautoml/actions/workflows/python-publish.yml/badge.svg)
+
 `naiveautoml` is a tool to find optimal machine learning pipelines for
 - classification tasks (binary, multi-class, or multi-label) and
 - regression tasks.
@@ -7,7 +9,7 @@ Other than most AutoML tools, `naiveautoml` has no (also no implicit) definition
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.1.0.
+The current version is 0.1.2.
 
 We highly recommend to check out the [usage example python notebook](https://github.com/fmohr/naiveautoml/blob/master/python/usage-example.ipynb).
 
@@ -21,6 +23,8 @@ X, y = sklearn.datasets.load_iris(return_X_y=True)
 naml.fit(X, y)
 print(naml.chosen_model)
 ```
+
+The task type (here classification) is derived automatically, but it can also be specified via `task_type` with values in `classification`, `regression` or `multilabel-indicator` to be sure.
 
 To get the **history** of considered pipelines, together with a (relative) timestamp and internal validation scores, you can access the history:
 
@@ -36,13 +40,14 @@ naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20)
 Want to put a **timeout**? Specify it *in seconds* (should be always bigger than 10s to avoid strange side effects).
 
 ```python
-naml = naiveautoml.NaiveAutoML(timeout=20)
+naml = naiveautoml.NaiveAutoML(timeout_overall=20)
 ```
-The timeout for pipeline evaluations is 10 seconds per default. You can modify this timeout on single pipeline evaluations with
+You can modify the pipeline timeout on single pipeline evaluations with
 
 ```python
-naml = naiveautoml.NaiveAutoML(execution_timeout=20)
+naml = naiveautoml.NaiveAutoML(timeout_candidate=20)
 ```
+*However*, be aware that on many pipelines this time out is *not enforced* since this not safely possible without memory leakage or malfunction.
 
 This can also be **combined** with `max_hpo_iterations`.
 
@@ -73,9 +78,9 @@ By default, log-loss is used for classification (AUROC in the case of binary cla
 naml = naiveautoml.NaiveAutoML(scoring="accuracy")
 ```
 
-To additionally evaluate other scoring functions (not used to rank candidates), you can use a list of `side_scores`:
+To additionally evaluate other scoring functions (not used to rank candidates), you can use a list of `passive_scorings`:
 ```python
-naml = naiveautoml.NaiveAutoML(scoring="accuracy", side_scores=["neg_log_loss", "f1_score"])
+naml = naiveautoml.NaiveAutoML(scoring="accuracy", passive_scorings=["neg_log_loss", "f1_score"])
 ```
 
 You can also pass a custom scoring function through a dictionary:

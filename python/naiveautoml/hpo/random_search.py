@@ -1,6 +1,7 @@
 from .._interfaces import HPOptimizer
 import time
 import pandas as pd
+import numpy as np
 
 
 class RandomHPO(HPOptimizer):
@@ -32,15 +33,22 @@ class RandomHPO(HPOptimizer):
         candidate_history_entry["time"] = time.time()
         candidate_pipeline = candidate_history_entry["pipeline"]
 
-        # determine whether a timeout is to be applied
-        timeout = self.task.timeout_candidate if self.is_timeout_required(candidate_pipeline) else None
-
-        # evaluate configured pipeline
         time_start_eval = time.time()
-        status, scores, evaluation_report, exception = self.evaluator.evaluate(
-            pl=candidate_pipeline,
-            timeout=timeout
-        )
+        if self.is_pipeline_forbidden(candidate_pipeline):
+            status = "avoided"
+            scores = {s["name"]: np.nan for s in [self.task.scoring] + self.task.passive_scorings}
+            evaluation_report = None
+            exception = None
+        else:
+
+            # determine whether a timeout is to be applied
+            timeout = self.task.timeout_candidate if self.is_timeout_required(candidate_pipeline) else None
+
+            # evaluate configured pipeline
+            status, scores, evaluation_report, exception = self.evaluator.evaluate(
+                pl=candidate_pipeline,
+                timeout=timeout
+            )
         if not isinstance(scores, dict):
             raise TypeError(f"""
 The scores must be a dictionary as a function of the scoring functions. Observed type is {type(scores)}: {scores}
