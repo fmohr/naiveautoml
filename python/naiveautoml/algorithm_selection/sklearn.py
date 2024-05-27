@@ -303,6 +303,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
     def create_history_descriptor(self, base_pl_descriptor, hp_config):
         descriptor = base_pl_descriptor.copy()
+        descriptor["default_hp"] = False
         hpo_entries = self.hpo_helper.get_hps_by_step(hp_config)
         for k, v in hpo_entries.items():
             descriptor[f"{k}_hps"] = v
@@ -421,6 +422,8 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             raise
 
     def is_pl_prohibited_for_timeout(self, pl):
+
+        # all of these algorithms have problems if being enjailed with pynisher
         learner = pl["learner"] if self.task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
         if (
                 isinstance(learner, sklearn.discriminant_analysis.LinearDiscriminantAnalysis) or
@@ -430,6 +433,16 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                 isinstance(learner, sklearn.ensemble.HistGradientBoostingClassifier)
         ):
             return True
+
+        if "feature-pre-processor" in [e[0] for e in pl.steps]:
+            feature_pp = pl["feature-pre-processor"]
+            if (
+                    isinstance(feature_pp, sklearn.decomposition.PCA) or
+                    isinstance(feature_pp, sklearn.decomposition.KernelPCA) or
+                    isinstance(feature_pp, sklearn.kernel_approximation.RBFSampler) or
+                    isinstance(feature_pp, sklearn.kernel_approximation.Nystroem)
+            ):
+                return True
         return False
 
     def is_timeout_required(self, pl):
