@@ -75,9 +75,9 @@ By default, log-loss is used for classification (AUROC in the case of binary cla
 naml = naiveautoml.NaiveAutoML(scoring="accuracy")
 ```
 
-To additionally evaluate other scoring functions (not used to rank candidates), you can use a list of `side_scores`:
+To additionally evaluate other scoring functions (not used to rank candidates), you can use a list of `passive_scorings`:
 ```python
-naml = naiveautoml.NaiveAutoML(scoring="accuracy", side_scores=["neg_log_loss", "f1_score"])
+naml = naiveautoml.NaiveAutoML(scoring="accuracy", passive_scorings=["neg_log_loss", "f1_score"])
 ```
 
 You can also pass a custom scoring function through a dictionary:
