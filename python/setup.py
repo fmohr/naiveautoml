@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'naiveautoml',
   packages = find_packages(exclude=["test"]),
-  version = '0.1.1',
+  version = '0.1.2',
   license='MIT',
   description = 'Fast and Timeout-Free Automated Machine Learning for Multi-Class classification, Multi-Label classification, and regression.',
   author = 'Felix Mohr',
