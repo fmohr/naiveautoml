@@ -22,6 +22,8 @@ naml.fit(X, y)
 print(naml.chosen_model)
 ```
 
+The task type (here classification) is derived automatically, but it can also be specified via `task_type` with values in `classification`, `regression` or `multilabel-indicator` to be sure.
+
 To get the **history** of considered pipelines, together with a (relative) timestamp and internal validation scores, you can access the history:
 
 ```python
@@ -36,12 +38,12 @@ naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20)
 Want to put a **timeout**? Specify it *in seconds* (should be always bigger than 10s to avoid strange side effects).
 
 ```python
-naml = naiveautoml.NaiveAutoML(timeout=20)
+naml = naiveautoml.NaiveAutoML(timeout_overall=20)
 ```
 The timeout for pipeline evaluations is 10 seconds per default. You can modify this timeout on single pipeline evaluations with
 
 ```python
-naml = naiveautoml.NaiveAutoML(execution_timeout=20)
+naml = naiveautoml.NaiveAutoML(timeout_candidate=20)
 ```
 
 This can also be **combined** with `max_hpo_iterations`.
