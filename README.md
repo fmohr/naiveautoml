@@ -1,3 +1,5 @@
+![https://github.com/github/docs/actions/workflows/python-publish.yml/badge.svg](https://github.com/fmohr/naiveautoml/actions/workflows/python-publish.yml/badge.svg)
+
 # Naive AutoML
 `naiveautoml` is a tool to find optimal machine learning pipelines for
 - classification tasks (binary, multi-class, or multi-label) and
