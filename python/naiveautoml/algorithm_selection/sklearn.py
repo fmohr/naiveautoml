@@ -303,6 +303,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
     def create_history_descriptor(self, base_pl_descriptor, hp_config):
         descriptor = base_pl_descriptor.copy()
+        descriptor["default_hp"] = False
         hpo_entries = self.hpo_helper.get_hps_by_step(hp_config)
         for k, v in hpo_entries.items():
             descriptor[f"{k}_hps"] = v
@@ -465,8 +466,6 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         return False
 
     def is_pipeline_forbidden(self, pl):
-
-        print("CHECK_FORBIDDEN")
 
         if self.is_pl_prohibited_for_timeout(pl) and self.is_timeout_required(pl):
             return True

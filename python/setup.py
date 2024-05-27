@@ -1,8 +1,10 @@
-from distutils.core import setup
+from setuptools import setup, find_packages
+
+
 setup(
   name = 'naiveautoml',
-  packages = ['naiveautoml'],
-  version = '0.1.0',
+  packages = find_packages(exclude=["test"]),
+  version = '0.1.1',
   license='MIT',
   description = 'Fast and Timeout-Free Automated Machine Learning for Multi-Class classification, Multi-Label classification, and regression.',
   author = 'Felix Mohr',
@@ -13,7 +15,7 @@ setup(
   install_requires=[
           'numpy',
           'pandas',
-          'scikit-learn>=1.4',
+          'scikit-learn==1.4',
           'scikit-multilearn==0.2.0',
           'configspace<0.7.1',
           'scipy',
@@ -21,7 +23,8 @@ setup(
           'psutil',
           'tqdm',
           'parameterized',
-          'openml'
+          'openml',
+          'lccv'
       ],
   classifiers=[
     'Development Status :: 3 - Alpha',
