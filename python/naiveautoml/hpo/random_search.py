@@ -6,11 +6,15 @@ import numpy as np
 
 class RandomHPO(HPOptimizer):
 
-    def __init__(self, show_progress=False, logger=None):
+    def __init__(self, random_state=None, show_progress=False, logger=None):
         super().__init__(show_progress=show_progress, logger=logger)
         self.its = None
         self.configs_since_last_imp = None
         self.time_since_last_imp = None
+        if random_state is None:
+            self.random_state = 1
+        else:
+            self.random_state = random_state
 
     def reset(self, **kwargs):
         super().reset(**kwargs)
@@ -26,7 +30,7 @@ class RandomHPO(HPOptimizer):
         self.logger.info(f"Starting {self.its}-th HPO step. Currently best known score is {self.best_score}")
 
         # draw random parameters
-        candidate_config = self.config_space.sample_configuration(1)
+        candidate_config = self.config_space.sample_configuration(self.random_state)
         candidate_history_entry = self.create_history_descriptor(candidate_config)
         candidate_history_entry["time"] = time.time()
         candidate_pipeline = candidate_history_entry["pipeline"]

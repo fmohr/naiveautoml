@@ -78,16 +78,16 @@ def get_class(kls):
     return m
 
 
-def build_estimator(comp, params, X, y):
+def build_estimator(comp, params, X, y, random_state=None):
     if params is None:
         if get_class(comp["class"]) == sklearn.svm.SVC:
             params = {"kernel": config_json.read(json.dumps(comp["params"])).get_hyperparameter("kernel").value}
         else:
             return get_class(comp["class"])()
-    return compile_pipeline_by_class_and_params(get_class(comp["class"]), params, X, y)
+    return compile_pipeline_by_class_and_params(get_class(comp["class"]), params, X, y, random_state)
 
 
-def compile_pipeline_by_class_and_params(clazz, params, X, y):
+def compile_pipeline_by_class_and_params(clazz, params, X, y, random_state=None):
     if clazz == sklearn.cluster.FeatureAgglomeration:
         pooling_func_mapping = dict(mean=np.mean, median=np.median, max=np.max)
         n_clusters = int(params["n_clusters"])
@@ -127,10 +127,10 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
     if clazz == sklearn.decomposition.PCA:
         n_components = float(params["keep_variance"])
         whiten = check_for_bool(params["whiten"])
-        return sklearn.decomposition.PCA(n_components=n_components, whiten=whiten, copy=True)
+        return sklearn.decomposition.PCA(n_components=n_components, whiten=whiten, copy=True, random_state=random_state)
 
     if clazz == sklearn.decomposition.KernelPCA:
-        return sklearn.decomposition.KernelPCA(**params, copy_X=True)
+        return sklearn.decomposition.KernelPCA(**params, copy_X=True, random_state=random_state)
 
     if clazz == sklearn.decomposition.FastICA:
         algorithm = params["algorithm"]
@@ -141,7 +141,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             n_components=n_components,
             algorithm=algorithm,
             fun=fun,
-            whiten=whiten)
+            whiten=whiten,
+            random_state=random_state)
 
     if clazz == sklearn.preprocessing.PolynomialFeatures:
         include_bias = check_for_bool(params["include_bias"])
@@ -154,7 +155,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         )
 
     if clazz == sklearn.preprocessing.QuantileTransformer:
-        return sklearn.preprocessing.QuantileTransformer(**params)
+        return sklearn.preprocessing.QuantileTransformer(**params, random_state=random_state)
 
     if clazz == sklearn.preprocessing.PowerTransformer:
         return sklearn.preprocessing.PowerTransformer()
@@ -163,10 +164,10 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         return sklearn.preprocessing.Normalizer()
 
     if clazz == sklearn.kernel_approximation.RBFSampler:
-        return sklearn.kernel_approximation.RBFSampler(**params)
+        return sklearn.kernel_approximation.RBFSampler(**params, random_state=random_state)
 
     if clazz == sklearn.kernel_approximation.Nystroem:
-        return sklearn.kernel_approximation.Nystroem(**params)
+        return sklearn.kernel_approximation.Nystroem(**params, random_state=random_state)
 
     if clazz == sklearn.feature_selection.VarianceThreshold:
         return sklearn.feature_selection.VarianceThreshold()
@@ -180,7 +181,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
         elif score_func == "f_classif":
             score_func = sklearn.feature_selection.f_classif
         elif score_func == "mutual_info_classif":
-            score_func = sklearn.feature_selection.mutual_info_classif
+            def score_func(X, y):
+                return sklearn.feature_selection.mutual_info_classif(X, y, random_state=random_state)
             # mutual info classif constantly crashes without mode percentile
             mode = 'percentile'
         else:
@@ -234,7 +236,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             max_leaf_nodes=max_leaf_nodes,
             min_weight_fraction_leaf=min_weight_fraction_leaf,
             min_impurity_decrease=min_impurity_decrease,
-            class_weight=None)
+            class_weight=None,
+            random_state=random_state)
 
     if clazz == sklearn.linear_model.ARDRegression:
         params = dict(params).copy()
@@ -271,7 +274,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_samples_leaf=min_samples_leaf,
             max_leaf_nodes=max_leaf_nodes,
             min_weight_fraction_leaf=min_weight_fraction_leaf,
-            min_impurity_decrease=min_impurity_decrease
+            min_impurity_decrease=min_impurity_decrease,
+            random_state=random_state
         )
 
     if clazz == sklearn.ensemble.AdaBoostRegressor:
@@ -284,6 +288,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             estimator=base_estimator,
             n_estimators=n_estimators,
             learning_rate=learning_rate,
+            random_state=random_state
         )
 
     if clazz == sklearn.ensemble.ExtraTreesRegressor:
@@ -323,7 +328,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_weight_fraction_leaf=min_weight_fraction_leaf,
             min_impurity_decrease=min_impurity_decrease,
             oob_score=False,
-            n_jobs=1
+            n_jobs=1,
+            random_state=random_state
         )
 
     if clazz == sklearn.gaussian_process.GaussianProcessRegressor:
@@ -339,6 +345,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             alpha=alpha,
             copy_X_train=True,
             normalize_y=True,
+            random_state=random_state
         )
 
     if clazz == sklearn.ensemble.HistGradientBoostingRegressor:
@@ -390,7 +397,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             validation_fraction=validation_fraction_,
             verbose=False,
             warm_start=False,
-            quantile=quantile
+            quantile=quantile,
+            random_state=random_state
         )
 
     if clazz == sklearn.svm.LinearSVC:
@@ -411,13 +419,14 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             C=C,
             fit_intercept=fit_intercept,
             intercept_scaling=intercept_scaling,
-            multi_class=multi_class
+            multi_class=multi_class,
+            random_state=random_state
         )
 
     if clazz == sklearn.svm.SVC:
         kernel = params["kernel"]
         if len(params) == 1:
-            return sklearn.svm.SVC(kernel=kernel, probability=False)
+            return sklearn.svm.SVC(kernel=kernel, probability=False, random_state=random_state)
 
         C = float(params["C"])
         if "degree" not in params or params["degree"] is None:
@@ -446,7 +455,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             tol=tol,
             max_iter=max_iter,
             decision_function_shape='ovr',
-            probability=False
+            probability=False,
+            random_state=random_state
         )
 
     if clazz == sklearn.svm.LinearSVR:
@@ -466,6 +476,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             C=C,
             fit_intercept=fit_intercept,
             intercept_scaling=intercept_scaling,
+            random_state=random_state
         )
 
     if clazz == sklearn.svm.SVR:
@@ -560,6 +571,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             beta_1=beta_2,
             beta_2=beta_1,
             epsilon=epsilon,
+            random_state=random_state
             # We do not use these, see comments below in search space
             # momentum=self.momentum,
             # nesterovs_momentum=self.nesterovs_momentum,
@@ -601,6 +613,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             max_leaf_nodes=max_leaf_nodes,
             min_impurity_decrease=min_impurity_decrease,
             warm_start=False,
+            random_state=random_state
         )
 
     if clazz == sklearn.linear_model.SGDRegressor:
@@ -627,6 +640,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             shuffle=True,
             average=average,
             warm_start=False,
+            random_state=random_state
         )
 
     if clazz == sklearn.discriminant_analysis.LinearDiscriminantAnalysis:
@@ -698,7 +712,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             tol=tol,
             beta_1=beta_2,
             beta_2=beta_1,
-            epsilon=epsilon
+            epsilon=epsilon,
+            random_state=random_state
         )
 
     if clazz == sklearn.linear_model.SGDClassifier:
@@ -729,7 +744,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             power_t=power_t,
             shuffle=True,
             average=average,
-            warm_start=True
+            warm_start=True,
+            random_state=random_state
         )
 
     if clazz == sklearn.linear_model.PassiveAggressiveClassifier:
@@ -749,6 +765,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             shuffle=True,
             warm_start=True,
             average=average,
+            random_state=random_state
         )
 
     if clazz == sklearn.ensemble.RandomForestClassifier:
@@ -792,7 +809,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             bootstrap=bootstrap,
             max_leaf_nodes=max_leaf_nodes,
             min_impurity_decrease=min_impurity_decrease,
-            warm_start=True)
+            warm_start=True,
+            random_state=random_state)
 
     if clazz == sklearn.ensemble.HistGradientBoostingClassifier:
         learning_rate = float(params["learning_rate"])
@@ -848,7 +866,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             early_stopping=early_stopping_,
             n_iter_no_change=n_iter_no_change,
             validation_fraction=validation_fraction_,
-            warm_start=True
+            warm_start=True,
+            random_state=random_state
         )
 
     if clazz == sklearn.ensemble.ExtraTreesClassifier:
@@ -887,7 +906,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y):
             min_weight_fraction_leaf=min_weight_fraction_leaf,
             min_impurity_decrease=min_impurity_decrease,
             oob_score=oob_score,
-            warm_start=True
+            warm_start=True,
+            random_state=random_state
         )
 
     # allow instantiation without specific rule only for components without config space
