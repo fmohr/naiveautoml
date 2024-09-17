@@ -450,7 +450,8 @@ class TestNaiveAutoML(unittest.TestCase):
                 max_hpo_iterations=5,
                 show_progress=True,
                 task_type="regression",
-                evaluation_fun="mccv_1"
+                evaluation_fun="mccv",
+                kwargs_evaluation_fun={"n_splits": 1}
             )
             naml.fit(X_train, y_train)
             end = time.time()
@@ -666,7 +667,8 @@ class TestNaiveAutoML(unittest.TestCase):
                 task_type=task_type,
                 scoring=scoring,
                 timeout_candidate=2,
-                evaluation_fun="mccv_1"
+                evaluation_fun="mccv",
+                kwargs_evaluation_fun={"n_splits": 1}
             )
             task = naml.get_task_from_data(X, y, None)
             naml.reset(task)
@@ -747,7 +749,8 @@ class TestNaiveAutoML(unittest.TestCase):
         for i in range(1, 21):
             self.logger.info(f"Run {i}-th instance")
             automl = naiveautoml.NaiveAutoML(
-                evaluation_fun="mccv_1",
+                evaluation_fun="mccv",
+                kwargs_evaluation_fun={"n_splits": 1},
                 show_progress=True,
                 timeout_overall=30,
                 timeout_candidate=10

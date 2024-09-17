@@ -88,7 +88,7 @@ class EvaluationPool:
             is_medium_dataset = not is_small_dataset and task.X.shape[0] < 20000
             is_large_dataset = not (is_small_dataset or is_medium_dataset)
 
-            if kwargs_evaluation_fun is {}:
+            if not kwargs_evaluation_fun:
                 if is_small_dataset:
                     self.logger.info("This is a small dataset, choosing 5 splits for evaluation")
                     kwargs_evaluation_fun["n_splits"] = 5

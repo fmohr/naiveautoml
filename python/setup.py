@@ -13,9 +13,9 @@ setup(
   download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.27.tar.gz',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple', 'multi-class', 'multi-label', 'regression', 'no timeouts'],
   install_requires=[
-          'numpy',
+          'numpy==1.26.4',
           'pandas',
-          'scikit-learn==1.4',
+          'scikit-learn==1.4.2',
           'scikit-multilearn==0.2.0',
           'configspace<0.7.1',
           'scipy',
