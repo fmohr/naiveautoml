@@ -24,7 +24,7 @@ class EvaluationPool:
                  logger_name=None,
                  use_caching=True,
                  error_treatment="info",
-                 kwargs_evaluation_fun={},
+                 kwargs_evaluation_fun=None,
                  random_state=None
                  ):
 
@@ -83,11 +83,10 @@ class EvaluationPool:
             self.logger.info("Choosing mccv as default evaluation function.")
             evaluation_fun = "mccv"
 
-        if evaluation_fun in ["lccv", "mccv"]:
+        if evaluation_fun in ["kfold", "mccv"]:
             is_small_dataset = task.X.shape[0] < 2000
             is_medium_dataset = not is_small_dataset and task.X.shape[0] < 20000
             is_large_dataset = not (is_small_dataset or is_medium_dataset)
-
             if not kwargs_evaluation_fun:
                 if is_small_dataset:
                     self.logger.info("This is a small dataset, choosing 5 splits for evaluation")
@@ -103,12 +102,18 @@ class EvaluationPool:
                         "Invalid case for dataset size!! This should never happen. Please report this as a bug.")
 
             if evaluation_fun == "mccv":
-                return MccvEvaluator(task.inferred_task_type, random_state=self.random_state, **kwargs_evaluation_fun)
+                return MccvEvaluator(task_type=task.inferred_task_type,
+                                     random_state=self.random_state,
+                                     kwargs_evaluation_fun=kwargs_evaluation_fun)
             elif evaluation_fun == "kfold":
-                return KFoldEvaluator(task.inferred_task_type, random_state=self.random_state, **kwargs_evaluation_fun)
+                return KFoldEvaluator(task_type=task.inferred_task_type,
+                                      random_state=self.random_state,
+                                      kwargs_evaluation_fun=kwargs_evaluation_fun)
 
         elif evaluation_fun == "lccv":
-            return LccvEvaluator(task.inferred_task_type, random_state=self.random_state, **kwargs_evaluation_fun)
+            return LccvEvaluator(task_type=task.inferred_task_type,
+                                 random_state=self.random_state,
+                                 kwargs_evaluation_fun=kwargs_evaluation_fun)
         else:
             return evaluation_fun
 

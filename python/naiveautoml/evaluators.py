@@ -11,17 +11,20 @@ class LccvEvaluator:
 
     def __init__(self,
                  task_type,
-                 train_size=0.8,
                  logger_name="naml.evaluator",
-                 repetitions_per_anchor=5,
-                 random_state=None):
+                 random_state=None,
+                 kwargs_evaluation_fun=None):
 
+        self.kwargs_lccv = kwargs_evaluation_fun
         self.task_type = task_type
         self.r = -np.inf
-        self.train_size = train_size
-        self.repetitions_per_anchor = repetitions_per_anchor
         self.random_state = random_state
         self.logger = logging.getLogger(logger_name)
+
+        if "target_anchor" not in self.kwargs_lccv:
+            self.kwargs_lccv["target_anchor"] = 0.8
+        if "max_evaluations" not in self.kwargs_lccv:
+            self.kwargs_lccv["max_evaluations"] = 5
 
     def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -38,9 +41,8 @@ class LccvEvaluator:
                     r=self.r,
                     base_scoring=scorings[0]["name"],
                     additional_scorings=[s["name"] for s in scorings[1:]],
-                    target_anchor=self.train_size,
-                    max_evaluations=self.repetitions_per_anchor,
-                    seed=self.random_state
+                    seed=self.random_state,
+                    **self.kwargs_lccv
                 )
                 if not np.isnan(score) and score > self.r:
                     self.r = score
@@ -200,17 +202,21 @@ class SplitBasedEvaluator:
 
 class KFoldEvaluator(SplitBasedEvaluator):
 
-    def __init__(self, task_type, n_splits, random_state=None, logger_name="naml.evaluator"):
+    def __init__(self,
+                 task_type,
+                 random_state=None,
+                 logger_name="naml.evaluator",
+                 kwargs_evaluation_fun=None):
 
         # define splitter
         if task_type in ["classification"]:
             splitter = sklearn.model_selection.StratifiedKFold(
-                n_splits=n_splits,
                 random_state=random_state,
-                shuffle=True
+                shuffle=True,
+                **kwargs_evaluation_fun
             )
         elif task_type in ["regression", "multilabel-indicator"]:
-            splitter = sklearn.model_selection.KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+            splitter = sklearn.model_selection.KFold(random_state=random_state, shuffle=True, **kwargs_evaluation_fun)
         else:
             raise ValueError(f"Unsupported task type {task_type}")
 
@@ -219,19 +225,23 @@ class KFoldEvaluator(SplitBasedEvaluator):
 
 class MccvEvaluator(SplitBasedEvaluator):
 
-    def __init__(self, task_type, n_splits, random_state=None, logger_name="naml.evaluator"):
+    def __init__(self,
+                 task_type,
+                 random_state=None,
+                 logger_name="naml.evaluator",
+                 kwargs_evaluation_fun=None):
 
         if task_type in ["classification"]:
             splitter = sklearn.model_selection.StratifiedShuffleSplit(
-                n_splits=n_splits,
                 train_size=0.8,
-                random_state=random_state
+                random_state=random_state,
+                **kwargs_evaluation_fun
             )
         elif task_type in ["regression", "multilabel-indicator"]:
             splitter = sklearn.model_selection.ShuffleSplit(
-                n_splits=n_splits,
                 train_size=0.8,
-                random_state=random_state
+                random_state=random_state,
+                **kwargs_evaluation_fun
             )
         else:
             raise ValueError(f"Unsupported task type {task_type}")

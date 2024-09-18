@@ -29,9 +29,9 @@ class NaiveAutoML:
                  max_hpo_iterations=100,
                  max_hpo_iterations_without_imp=100,
                  max_hpo_time_without_imp=1800,
-                 kwargs_as={},
-                 kwargs_hpo={},
-                 kwargs_evaluation_fun={},
+                 kwargs_as=None,
+                 kwargs_hpo=None,
+                 kwargs_evaluation_fun=None,
                  logger_name=None,
                  random_state: int = None,
                  strictly_naive: bool = False,
@@ -58,6 +58,12 @@ class NaiveAutoML:
         # init logger
         self.logger_name = logger_name
         self.logger = logging.getLogger('naiveautoml' if logger_name is None else logger_name)
+
+        if kwargs_as is None:
+            kwargs_as = {}
+        
+        if kwargs_hpo is None:
+            kwargs_hpo = {}
 
         # configure algorithm selector
         if isinstance(algorithm_selector, str):
@@ -100,7 +106,10 @@ class NaiveAutoML:
 
         # configure evaluation function
         self.evaluation_fun = evaluation_fun
-        self.kwargs_evaluation_fun = kwargs_evaluation_fun
+        if kwargs_evaluation_fun is None:
+            self.kwargs_evaluation_fun = {}
+        else:
+            self.kwargs_evaluation_fun = kwargs_evaluation_fun
 
         # memorize scorings
         self.scoring = None
