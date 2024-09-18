@@ -48,6 +48,8 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                  search_space=None,
                  standard_classifier=KNeighborsClassifier,
                  standard_regressor=LinearRegression,
+                 excluded_steps: list = None,
+                 excluded_components: dict = None,
                  random_state=None,
                  show_progress=False,
                  opt_ordering=None,
@@ -60,6 +62,10 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         :param standard_classifier:
         :param standard_regressor:
+        :param excluded_steps:
+            list of names of steps to be excluded entirely from the process (`learner` must not be excluded)
+        :param excluded_components:
+            dict with keys being step names and values being lists of names of components to be excluded.
         :param show_progress:
         :param opt_ordering:
         :param sparse: whether data is treated sparsely in pre-processing.
@@ -78,6 +84,15 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         self.opt_ordering = opt_ordering
         self.standard_classifier = standard_classifier
         self.standard_regressor = standard_regressor
+
+        # check whether steps or components are excluedd
+        if excluded_steps is not None:
+            if not isinstance(excluded_steps, list):
+                raise ValueError("excluded_steps must be None or a list of step names")
+            if "learner" in excluded_steps:
+                raise ValueError("The 'learner' step must not be excluded in excluded_steps.")
+        self.excluded_steps = excluded_steps
+        self.excluded_components = excluded_components
         self.strictly_naive = strictly_naive
         self.sparse = sparse
         self.raise_errors = raise_errors
@@ -159,6 +174,11 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         best_score = -np.inf
         for step_index, step_name in enumerate(self.opt_ordering):
 
+            # check whether this step should be skipped.
+            if self.excluded_steps is not None and step_name in self.excluded_steps:
+                self.logger.info(f"No component will be selected for excluded step {step_name}")
+                continue
+
             # create list of components to try for this slot
             step = [step for step in self.search_space if step["name"] == step_name][0]
             self.logger.info("--------------------------------------------------")
@@ -168,6 +188,16 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             # find best default parametrization for this slot (depending on choice of previously configured slots)
             decision = None
             for comp in step["components"]:
+
+                # check whether this component is excluded by some pattern
+                if (
+                        self.excluded_components is not None and
+                        step_name in self.excluded_components and
+                        any([pattern in comp["class"] for pattern in self.excluded_components[step_name]])
+                ):
+                    self.logger.info(f"Skipping excluded component {comp['class']}.")
+                    continue
+
                 if deadline is not None:
                     remaining_time = deadline - 10 - time.time()
                     if remaining_time is not None and remaining_time < 0:

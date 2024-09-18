@@ -756,3 +756,90 @@ class TestNaiveAutoML(unittest.TestCase):
                 timeout_candidate=10
             )
             automl.fit(X_train, y_train)
+
+    @parameterized.expand([
+        (61,)
+    ])
+    def test_exclusion_of_steps(self, openmlid):
+
+        excluded_steps = ["data-pre-processor", "feature-pre-processor"]
+
+        self.logger.info(f"Testing exclusion of steps.")
+        X, y = get_dataset(openmlid, as_numpy=False)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            timeout_overall=15,
+            max_hpo_iterations=1,
+            show_progress=True,
+            raise_errors=True,
+            kwargs_as={
+                "excluded_steps": excluded_steps
+            }
+        )
+        naml.fit(X, y)
+
+        # check that no results are there for excluded pre-processors
+        for excluded_step in excluded_steps:
+            self.assertEqual(0, len(naml.history[f"{excluded_step}_class"].dropna()))
+
+    @parameterized.expand([
+        (61,)
+    ])
+    def test_exclusion_of_steps_fails_if_excluding_learner(self, openmlid):
+
+        def f():
+            excluded_steps = ["learner"]
+
+            self.logger.info(f"Testing exclusion of steps.")
+            X, y = get_dataset(openmlid, as_numpy=False)
+            naml = naiveautoml.NaiveAutoML(
+                logger_name="naml",
+                timeout_overall=15,
+                max_hpo_iterations=1,
+                show_progress=True,
+                raise_errors=True,
+                kwargs_as={
+                    "excluded_steps": excluded_steps
+                }
+            )
+            naml.fit(X, y)
+
+        self.assertRaises(ValueError, f)
+
+    @parameterized.expand([
+        (61,)
+    ])
+    def test_exclusion_of_components(self, openmlid):
+
+        excluded_components = {
+            "data-pre-processor": ["MinMax"],
+            "feature-pre-processor": ["PolynomialFeatures"]
+        }
+
+        self.logger.info(f"Testing exclusion of steps.")
+        X, y = get_dataset(openmlid, as_numpy=False)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            timeout_overall=15,
+            max_hpo_iterations=0,
+            show_progress=True,
+            raise_errors=True,
+            kwargs_as={
+                "excluded_components": excluded_components
+            }
+        )
+        naml.fit(X, y)
+
+        # check that no results are there for excluded pre-processors
+        for excluded_step, list_of_excluded_component_names in excluded_components.items():
+            self.assertTrue(len(naml.history[f"{excluded_step}_class"].dropna()) > 0)
+            if len(list_of_excluded_component_names) > 0:
+                for excluded_component_name in list_of_excluded_component_names:
+
+                    self.assertEqual(
+                        0,
+                        sum([
+                            (n is not None and excluded_component_name in n)
+                            for n in naml.history[f"{excluded_step}_class"]
+                        ])
+                    )

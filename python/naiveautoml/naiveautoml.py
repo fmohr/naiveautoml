@@ -164,7 +164,7 @@ class NaiveAutoML:
 
     @property
     def chosen_model(self):
-        return self._chosen_model.clone()
+        return self._chosen_model
 
     def get_evaluation_pool(self, task):
         return EvaluationPool(
