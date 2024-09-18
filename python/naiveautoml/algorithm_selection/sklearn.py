@@ -61,8 +61,10 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         :param standard_classifier:
         :param standard_regressor:
-        :param excluded_steps: list of names of steps to be excluded entirely from the process (`learner` must not be excluded)
-        :param excluded_components: dict with keys being step names and values being lists of names of components to be excluded.
+        :param excluded_steps:
+            list of names of steps to be excluded entirely from the process (`learner` must not be excluded)
+        :param excluded_components:
+            dict with keys being step names and values being lists of names of components to be excluded.
         :param show_progress:
         :param opt_ordering:
         :param sparse: whether data is treated sparsely in pre-processing.
@@ -84,7 +86,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         # check whether steps or components are excluedd
         if excluded_steps is not None:
             if not isinstance(excluded_steps, list):
-                raise ValueError(f"excluded_steps must be None or a list of step names")
+                raise ValueError("excluded_steps must be None or a list of step names")
             if "learner" in excluded_steps:
                 raise ValueError("The 'learner' step must not be excluded in excluded_steps.")
         self.excluded_steps = excluded_steps
