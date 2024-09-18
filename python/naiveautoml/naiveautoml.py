@@ -61,7 +61,7 @@ class NaiveAutoML:
 
         if kwargs_as is None:
             kwargs_as = {}
-        
+
         if kwargs_hpo is None:
             kwargs_hpo = {}
 
