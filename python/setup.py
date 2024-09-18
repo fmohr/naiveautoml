@@ -4,13 +4,12 @@ from setuptools import setup, find_packages
 setup(
   name = 'naiveautoml',
   packages = find_packages(exclude=["test"]),
-  version = '0.1.2',
+  version = '0.1.3',
   license='MIT',
   description = 'Fast and Timeout-Free Automated Machine Learning for Multi-Class classification, Multi-Label classification, and regression.',
   author = 'Felix Mohr',
   author_email = 'mail@felixmohr.de',
   url = 'https://github.com/fmohr/naiveautoml',
-  download_url = 'https://github.com/fmohr/naiveautoml/archive/refs/tags/v0.0.27.tar.gz',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple', 'multi-class', 'multi-label', 'regression', 'no timeouts'],
   install_requires=[
           'numpy',
