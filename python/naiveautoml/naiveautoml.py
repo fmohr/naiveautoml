@@ -106,10 +106,7 @@ class NaiveAutoML:
 
         # configure evaluation function
         self.evaluation_fun = evaluation_fun
-        if kwargs_evaluation_fun is None:
-            self.kwargs_evaluation_fun = {}
-        else:
-            self.kwargs_evaluation_fun = kwargs_evaluation_fun
+        self.kwargs_evaluation_fun = kwargs_evaluation_fun
 
         # memorize scorings
         self.scoring = None

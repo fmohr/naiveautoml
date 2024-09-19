@@ -15,16 +15,15 @@ class LccvEvaluator:
                  random_state=None,
                  kwargs_evaluation_fun=None):
 
-        self.kwargs_lccv = kwargs_evaluation_fun
         self.task_type = task_type
         self.r = -np.inf
         self.random_state = random_state
         self.logger = logging.getLogger(logger_name)
 
-        if "target_anchor" not in self.kwargs_lccv:
-            self.kwargs_lccv["target_anchor"] = 0.8
-        if "max_evaluations" not in self.kwargs_lccv:
-            self.kwargs_lccv["max_evaluations"] = 5
+        if kwargs_evaluation_fun is None:
+            self.kwargs_evaluation_fun = {"target_anchor": 0.8, "max_evaluations": 5}
+        else:
+            self.kwargs_evaluation_fun = kwargs_evaluation_fun
 
     def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -42,7 +41,7 @@ class LccvEvaluator:
                     base_scoring=scorings[0]["name"],
                     additional_scorings=[s["name"] for s in scorings[1:]],
                     seed=self.random_state,
-                    **self.kwargs_lccv
+                    **self.kwargs_evaluation_fun
                 )
                 if not np.isnan(score) and score > self.r:
                     self.r = score
@@ -208,6 +207,9 @@ class KFoldEvaluator(SplitBasedEvaluator):
                  logger_name="naml.evaluator",
                  kwargs_evaluation_fun=None):
 
+        if kwargs_evaluation_fun is None:
+            kwargs_evaluation_fun = {"n_splits": 5}
+
         # define splitter
         if task_type in ["classification"]:
             splitter = sklearn.model_selection.StratifiedKFold(
@@ -230,6 +232,9 @@ class MccvEvaluator(SplitBasedEvaluator):
                  random_state=None,
                  logger_name="naml.evaluator",
                  kwargs_evaluation_fun=None):
+
+        if kwargs_evaluation_fun is None:
+            kwargs_evaluation_fun = {"n_splits": 5}
 
         if task_type in ["classification"]:
             splitter = sklearn.model_selection.StratifiedShuffleSplit(

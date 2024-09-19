@@ -87,16 +87,16 @@ class EvaluationPool:
             is_small_dataset = task.X.shape[0] < 2000
             is_medium_dataset = not is_small_dataset and task.X.shape[0] < 20000
             is_large_dataset = not (is_small_dataset or is_medium_dataset)
-            if not kwargs_evaluation_fun:
+            if kwargs_evaluation_fun is None:
                 if is_small_dataset:
                     self.logger.info("This is a small dataset, choosing 5 splits for evaluation")
-                    kwargs_evaluation_fun["n_splits"] = 5
+                    kwargs_evaluation_fun = {"n_splits": 5}
                 elif is_medium_dataset:
                     self.logger.info("This is a medium dataset, choosing 3 splits for evaluation")
-                    kwargs_evaluation_fun["n_splits"] = 3
+                    kwargs_evaluation_fun = {"n_splits": 3}
                 elif is_large_dataset:
                     self.logger.info("This is a large dataset, choosing 1 split for evaluation")
-                    kwargs_evaluation_fun["n_splits"] = 1
+                    kwargs_evaluation_fun = {"n_splits": 1}
                 else:
                     raise ValueError(
                         "Invalid case for dataset size!! This should never happen. Please report this as a bug.")
