@@ -50,6 +50,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                  standard_regressor=LinearRegression,
                  excluded_steps: list = None,
                  excluded_components: dict = None,
+                 random_state=None,
                  show_progress=False,
                  opt_ordering=None,
                  logger=None,
@@ -77,6 +78,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         self.logger = logger
 
         self._configured_search_space = search_space
+        self.random_state = None
 
         self.show_progress = show_progress
         self.opt_ordering = opt_ordering
@@ -348,7 +350,8 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                     comp,
                     hpo_entries[step_name],
                     X=self.task.X,
-                    y=self.task.y
+                    y=self.task.y,
+                    random_state=self.random_state
                 )
                 if step_name == "learner" and self.task.inferred_task_type == "multilabel-indicator":
                     elem = BinaryRelevance(elem)
@@ -594,7 +597,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         steps = []
         for step_name, comp in hpo_process.comps_by_steps:
             params = hpo_process.get_best_config(step_name)
-            steps.append((step_name, build_estimator(comp, params, X, y)))
+            steps.append((step_name, build_estimator(comp, params, X, y, self.random_state)))
         return steps
 
     def get_pipeline_for_decision_in_step(self, step_name, comp, X, y, decisions):
@@ -620,7 +623,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
             # encapsulate BR if necessary
             def get_elem(step_name_inner, class_name):
-                elem = build_estimator(class_name, None, X, y)
+                elem = build_estimator(class_name, None, X, y, self.random_state)
                 if step_name_inner == "learner" and self.task.inferred_task_type == "multilabel-indicator":
                     elem = BinaryRelevance(elem)
                 return elem

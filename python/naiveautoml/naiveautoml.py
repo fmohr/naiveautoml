@@ -29,9 +29,11 @@ class NaiveAutoML:
                  max_hpo_iterations=100,
                  max_hpo_iterations_without_imp=100,
                  max_hpo_time_without_imp=1800,
-                 kwargs_as={},
-                 kwargs_hpo={},
+                 kwargs_as=None,
+                 kwargs_hpo=None,
+                 kwargs_evaluation_fun=None,
                  logger_name=None,
+                 random_state: int = None,
                  strictly_naive: bool = False,
                  raise_errors: bool = False):
         """
@@ -57,6 +59,12 @@ class NaiveAutoML:
         self.logger_name = logger_name
         self.logger = logging.getLogger('naiveautoml' if logger_name is None else logger_name)
 
+        if kwargs_as is None:
+            kwargs_as = {}
+
+        if kwargs_hpo is None:
+            kwargs_hpo = {}
+
         # configure algorithm selector
         if isinstance(algorithm_selector, str):
             accepted_selectors = ["sklearn"]
@@ -68,6 +76,7 @@ class NaiveAutoML:
                 self.algorithm_selector = SKLearnAlgorithmSelector(
                     show_progress=show_progress,
                     raise_errors=raise_errors,
+                    random_state=random_state,
                     **kwargs_as
                 )
             else:
@@ -97,6 +106,7 @@ class NaiveAutoML:
 
         # configure evaluation function
         self.evaluation_fun = evaluation_fun
+        self.kwargs_evaluation_fun = kwargs_evaluation_fun
 
         # memorize scorings
         self.scoring = None
@@ -126,6 +136,7 @@ class NaiveAutoML:
         self.mandatory_pre_processing = None
 
         # state variables
+        self.random_state = random_state
         self.evaluator = None
         self.task_type = task_type
         self.task = None
@@ -156,7 +167,9 @@ class NaiveAutoML:
         return EvaluationPool(
             task=task,
             evaluation_fun=self.evaluation_fun,
-            logger_name=None if self.logger_name is None else self.logger_name + ".pool"
+            logger_name=None if self.logger_name is None else self.logger_name + ".pool",
+            kwargs_evaluation_fun=self.kwargs_evaluation_fun,
+            random_state=self.random_state
         )
 
     def get_task_from_data(self, X, y, categorical_attributes=None):

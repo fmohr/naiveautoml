@@ -7,12 +7,23 @@ import pandas as pd
 import sklearn
 
 
-class LccvValidator:
+class LccvEvaluator:
 
-    def __init__(self, instance, train_size=0.8):
+    def __init__(self,
+                 task_type,
+                 logger_name="naml.evaluator",
+                 random_state=None,
+                 kwargs_evaluation_fun=None):
+
+        self.task_type = task_type
         self.r = -np.inf
-        self.instance = instance
-        self.train_size = train_size
+        self.random_state = random_state
+        self.logger = logging.getLogger(logger_name)
+
+        if kwargs_evaluation_fun is None:
+            self.kwargs_evaluation_fun = {"target_anchor": 0.8, "max_evaluations": 5}
+        else:
+            self.kwargs_evaluation_fun = kwargs_evaluation_fun
 
     def __call__(self, pl, X, y, scorings, error_treatment="raise"):
         warnings.filterwarnings('ignore', module='sklearn')
@@ -27,9 +38,10 @@ class LccvValidator:
                     X,
                     y,
                     r=self.r,
-                    base_scoring=scorings[0],
-                    additional_scorings=scorings[1:],
-                    target_anchor=self.train_size
+                    base_scoring=scorings[0]["name"],
+                    additional_scorings=[s["name"] for s in scorings[1:]],
+                    seed=self.random_state,
+                    **self.kwargs_evaluation_fun
                 )
                 if not np.isnan(score) and score > self.r:
                     self.r = score
@@ -37,44 +49,47 @@ class LccvValidator:
                 results_at_highest_anchor = elcm.df[elcm.df["anchor"] == np.max(elcm.df["anchor"])].mean(
                     numeric_only=True)
                 results = {
-                    s: np.round(np.mean(results_at_highest_anchor[f"score_test_{s}"]), 4)
+                    s["name"]: np.round(np.mean(results_at_highest_anchor[f"score_test_{s['name']}"]), 4)
                     if not np.isnan(score) else np.nan
                     for s in scorings
                 }
-                evaluation_history = {
-                    s: elc if not np.isnan(score) else np.nan for s in scorings
+                evaluation_report = {
+                    s["name"]: elc if not np.isnan(score) else np.nan for s in scorings
                 }
 
                 # return the object itself, so that it can be overwritten in the pool (necessary because of pynisher)
-                return results, evaluation_history
+                return results, evaluation_report
             except KeyboardInterrupt:
                 raise
             except Exception as e:
                 if error_treatment != "raise":
                     msg = f"Observed an error: {e}"
                     if error_treatment == "info":
-                        self.instance.logger.info(msg)
+                        self.logger.info(msg)
                     elif error_treatment == "warning":
-                        self.instance.logger.warn(msg)
+                        self.logger.info(msg)
                     elif error_treatment == "error":
-                        self.instance.logger.warn(msg)
+                        self.logger.info(msg)
                 else:
                     raise
-            return {s: np.nan for s in scorings}, {s: {} for s in scorings}
+            return {s["name"]: np.nan for s in scorings}, {s["name"]: {} for s in scorings}
         except KeyboardInterrupt:
             raise
         except Exception as e:
             if error_treatment != "raise":
                 msg = f"Observed an error: {e}"
                 if error_treatment == "info":
-                    self.instance.logger.info(msg)
+                    self.logger.info(msg)
                 elif error_treatment == "warning":
-                    self.instance.logger.warn(msg)
+                    self.logger.info(msg)
                 elif error_treatment == "error":
-                    self.instance.logger.warn(msg)
+                    self.logger.info(msg)
                 return None, None
             else:
                 raise
+
+    def update(self, pl, scores):
+        self.r = max([scores[s] for s in scores])
 
 
 class SplitBasedEvaluator:
@@ -106,11 +121,11 @@ class SplitBasedEvaluator:
             if error_treatment != "raise":
                 msg = f"Observed an error: {e}"
                 if error_treatment == "info":
-                    self.instance.logger.info(msg)
+                    self.logger.info(msg)
                 elif error_treatment == "warning":
-                    self.instance.logger.warn(msg)
+                    self.logger.info(msg)
                 elif error_treatment == "error":
-                    self.instance.logger.warn(msg)
+                    self.logger.info(msg)
                 return None, None
             else:
                 raise
@@ -173,51 +188,65 @@ class SplitBasedEvaluator:
                 if error_treatment != "raise":
                     msg = f"Observed an error: {e}"
                     if error_treatment == "info":
-                        self.instance.logger.info(msg)
+                        self.logger.info(msg)
                     elif error_treatment == "warning":
-                        self.instance.logger.warn(msg)
+                        self.logger.info(msg)
                     elif error_treatment == "error":
-                        self.instance.logger.warn(msg)
+                        self.logger.info(msg)
                     out[scoring["name"]] = np.nan
                 else:
                     raise
         return out
 
 
-class KFold(SplitBasedEvaluator):
+class KFoldEvaluator(SplitBasedEvaluator):
 
-    def __init__(self, task_type, n_splits, logger_name="naml.evaluator"):
+    def __init__(self,
+                 task_type,
+                 random_state=None,
+                 logger_name="naml.evaluator",
+                 kwargs_evaluation_fun=None):
+
+        if kwargs_evaluation_fun is None:
+            kwargs_evaluation_fun = {"n_splits": 5}
 
         # define splitter
         if task_type in ["classification"]:
             splitter = sklearn.model_selection.StratifiedKFold(
-                n_splits=n_splits,
-                random_state=None,
-                shuffle=True
+                random_state=random_state,
+                shuffle=True,
+                **kwargs_evaluation_fun
             )
         elif task_type in ["regression", "multilabel-indicator"]:
-            splitter = sklearn.model_selection.KFold(n_splits=n_splits, random_state=None, shuffle=True)
+            splitter = sklearn.model_selection.KFold(random_state=random_state, shuffle=True, **kwargs_evaluation_fun)
         else:
             raise ValueError(f"Unsupported task type {task_type}")
 
         super().__init__(task_type=task_type, splitter=splitter, logger_name=logger_name)
 
 
-class Mccv(SplitBasedEvaluator):
+class MccvEvaluator(SplitBasedEvaluator):
 
-    def __init__(self, task_type, n_splits, logger_name="naml.evaluator"):
+    def __init__(self,
+                 task_type,
+                 random_state=None,
+                 logger_name="naml.evaluator",
+                 kwargs_evaluation_fun=None):
+
+        if kwargs_evaluation_fun is None:
+            kwargs_evaluation_fun = {"n_splits": 5}
 
         if task_type in ["classification"]:
             splitter = sklearn.model_selection.StratifiedShuffleSplit(
-                n_splits=n_splits,
                 train_size=0.8,
-                random_state=None
+                random_state=random_state,
+                **kwargs_evaluation_fun
             )
         elif task_type in ["regression", "multilabel-indicator"]:
             splitter = sklearn.model_selection.ShuffleSplit(
-                n_splits=n_splits,
                 train_size=0.8,
-                random_state=None
+                random_state=random_state,
+                **kwargs_evaluation_fun
             )
         else:
             raise ValueError(f"Unsupported task type {task_type}")

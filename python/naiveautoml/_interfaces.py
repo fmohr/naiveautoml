@@ -111,17 +111,17 @@ class SupervisedTask:
     def description(self, indent=1):
         return f"""
         Input type: {type(self._X)} (sparse: {self._sparse_X})
-    Input shape: {self._X.shape}
-    Target type: {type(self._y)} (sparse: {self._sparse_y})
-    Target shape: {self._y.shape}.
-    Scoring: {self.scoring}
-    Other scorings computed: {self.passive_scorings}
-    Timeout Overall: {self.timeout_overall}
-    Timeout per Candidate: {self.timeout_candidate}
-    Max HPO iterations: {self.max_hpo_iterations}
-    Max HPO iterations w/o improvement: {self.max_hpo_iterations_without_imp}
-    Max HPO time (s) w/o improvement: {self.max_hpo_time_without_imp}
-    """
+        Input shape: {self._X.shape}
+        Target type: {type(self._y)} (sparse: {self._sparse_y})
+        Target shape: {self._y.shape}.
+        Scoring: {self.scoring}
+        Other scorings computed: {self.passive_scorings}
+        Timeout Overall: {self.timeout_overall}
+        Timeout per Candidate: {self.timeout_candidate}
+        Max HPO iterations: {self.max_hpo_iterations}
+        Max HPO iterations w/o improvement: {self.max_hpo_iterations_without_imp}
+        Max HPO time (s) w/o improvement: {self.max_hpo_time_without_imp}
+        """
 
     def infer_task_type(self):
         """

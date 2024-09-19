@@ -8,7 +8,7 @@ import psutil
 import scipy.sparse
 import time
 import pynisher
-from .evaluators import LccvValidator, KFold, Mccv
+from .evaluators import LccvEvaluator, KFoldEvaluator, MccvEvaluator
 
 import ConfigSpace
 import traceback
@@ -23,8 +23,12 @@ class EvaluationPool:
                  tolerance_estimation_error=0.01,
                  logger_name=None,
                  use_caching=True,
-                 error_treatment="info"
+                 error_treatment="info",
+                 kwargs_evaluation_fun=None,
+                 random_state=None
                  ):
+
+        self.random_state = random_state
         domains_task_type = ["classification", "multilabel-indicator", "regression"]
         if task.inferred_task_type not in domains_task_type:
             raise ValueError(f"task_type must be in {domains_task_type} but is {task.inferred_task_type}.")
@@ -64,49 +68,52 @@ class EvaluationPool:
         else:
             self.logger.warning("side scores was not given as list, casting it to a list of size 1 implicitly.")
             self.side_scores = [task.passive_scorings]
-        self.evaluation_fun = self.get_evaluation_fun(evaluation_fun)
+        self.evaluation_fun = self.get_evaluation_fun(evaluation_fun, kwargs_evaluation_fun)
         self.bestScore = -np.inf
         self.tolerance_tuning = tolerance_tuning
         self.tolerance_estimation_error = tolerance_estimation_error
         self.cache = {}
         self.use_caching = use_caching
 
-    def get_evaluation_fun(self, evaluation_fun):
+    def get_evaluation_fun(self, evaluation_fun, kwargs_evaluation_fun):
 
         task = self.task
 
-        is_small_dataset = task.X.shape[0] < 2000
-        is_medium_dataset = not is_small_dataset and task.X.shape[0] < 20000
-        is_large_dataset = not (is_small_dataset or is_medium_dataset)
-
         if evaluation_fun is None:
-            if is_small_dataset:
-                self.logger.info("This is a small dataset, choosing mccv-5 for evaluation")
-                return Mccv(task.inferred_task_type, n_splits=5)
-            elif is_medium_dataset:
-                self.logger.info("This is a medium dataset, choosing mccv-3 for evaluation")
-                return Mccv(task.inferred_task_type, n_splits=3)
-            elif is_large_dataset:
-                self.logger.info("This is a large dataset, choosing mccv-1 for evaluation")
-                return Mccv(task.inferred_task_type, n_splits=1)
-            else:
-                raise ValueError(
-                    "Invalid case for dataset size!! This should never happen. Please report this as a bug.")
+            self.logger.info("Choosing mccv as default evaluation function.")
+            evaluation_fun = "mccv"
 
-        elif evaluation_fun == "lccv-80":
-            return LccvValidator(task.inferred_task_type, 0.8)
-        elif evaluation_fun == "lccv-90":
-            return LccvValidator(task.inferred_task_type, 0.9)
-        elif evaluation_fun == "kfold_5":
-            return KFold(task.inferred_task_type, n_splits=5)
-        elif evaluation_fun == "kfold_3":
-            return KFold(task.inferred_task_type, n_splits=3)
-        elif evaluation_fun == "mccv_1":
-            return Mccv(task.inferred_task_type, n_splits=1)
-        elif evaluation_fun == "mccv_3":
-            return Mccv(task.inferred_task_type, n_splits=3)
-        elif evaluation_fun == "mccv_5":
-            return Mccv(task.inferred_task_type, n_splits=5)
+        if evaluation_fun in ["kfold", "mccv"]:
+            is_small_dataset = task.X.shape[0] < 2000
+            is_medium_dataset = not is_small_dataset and task.X.shape[0] < 20000
+            is_large_dataset = not (is_small_dataset or is_medium_dataset)
+            if kwargs_evaluation_fun is None:
+                if is_small_dataset:
+                    self.logger.info("This is a small dataset, choosing 5 splits for evaluation")
+                    kwargs_evaluation_fun = {"n_splits": 5}
+                elif is_medium_dataset:
+                    self.logger.info("This is a medium dataset, choosing 3 splits for evaluation")
+                    kwargs_evaluation_fun = {"n_splits": 3}
+                elif is_large_dataset:
+                    self.logger.info("This is a large dataset, choosing 1 split for evaluation")
+                    kwargs_evaluation_fun = {"n_splits": 1}
+                else:
+                    raise ValueError(
+                        "Invalid case for dataset size!! This should never happen. Please report this as a bug.")
+
+            if evaluation_fun == "mccv":
+                return MccvEvaluator(task_type=task.inferred_task_type,
+                                     random_state=self.random_state,
+                                     kwargs_evaluation_fun=kwargs_evaluation_fun)
+            elif evaluation_fun == "kfold":
+                return KFoldEvaluator(task_type=task.inferred_task_type,
+                                      random_state=self.random_state,
+                                      kwargs_evaluation_fun=kwargs_evaluation_fun)
+
+        elif evaluation_fun == "lccv":
+            return LccvEvaluator(task_type=task.inferred_task_type,
+                                 random_state=self.random_state,
+                                 kwargs_evaluation_fun=kwargs_evaluation_fun)
         else:
             return evaluation_fun
 
