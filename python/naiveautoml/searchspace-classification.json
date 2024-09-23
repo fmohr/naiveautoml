@@ -1313,7 +1313,7 @@
                                 "elasticnet",
                                 "None"
                             ],
-                            "default_value": "l2"
+                            "default": "l2"
                         },
                         {
                             "name": "dual",
@@ -1322,7 +1322,7 @@
                                 "True",
                                 "False"
                             ],
-                            "default_value": "False"
+                            "default": "False"
                         },
                         {
                             "name": "C",
