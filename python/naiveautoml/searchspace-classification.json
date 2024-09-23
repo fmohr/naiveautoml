@@ -1301,6 +1301,43 @@
                 }
             },
             {
+                "class": "sklearn.linear_model.LogisticRegression",
+                "params": {
+                    "hyperparameters": [
+                        {
+                            "name": "penalty",
+                            "type": "categorical",
+                            "choices": [
+                                "l1",
+                                "l2",
+                                "elasticnet",
+                                "None"
+                            ],
+                            "default_value": "l2"
+                        },
+                        {
+                            "name": "dual",
+                            "type": "categorical",
+                            "choices": [
+                                "True",
+                                "False"
+                            ],
+                            "default_value": "False"
+                        },
+                        {
+                            "name": "C",
+                            "type": "uniform_float",
+                            "log": true,
+                            "lower": 0.03125,
+                            "upper": 32768.0,
+                            "default": 1.0
+                        }
+                    ],
+                    "conditions": [],
+                    "forbiddens": []
+                }
+            },
+            {
                 "class": "sklearn.neural_network._multilayer_perceptron.MLPClassifier",
                 "params": {
                     "hyperparameters": [
