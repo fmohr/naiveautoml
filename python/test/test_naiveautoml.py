@@ -298,7 +298,7 @@ class TestNaiveAutoML(unittest.TestCase):
             field = f"{step}_class"
             class_in_phase1 = best_solution_in_phase_1[field]
             class_in_phase2 = pd.unique(history[field])[0]
-            self.assertEquals(
+            self.assertEqual(
                 class_in_phase1,
                 class_in_phase2,
                 f"Choice for {step} should conicide but is {class_in_phase1} in AS phase and {class_in_phase2} in HPO."

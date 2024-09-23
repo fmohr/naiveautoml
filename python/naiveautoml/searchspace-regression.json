@@ -941,7 +941,7 @@
                             "name": "alpha",
                             "type": "uniform_float",
                             "log": true,
-                            "lower": 1e-14,
+                            "lower": 1e-10,
                             "upper": 1.0,
                             "default": 1e-08
                         },

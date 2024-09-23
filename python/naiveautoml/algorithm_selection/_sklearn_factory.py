@@ -662,6 +662,10 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y, random_state=None)
     if clazz == sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis:
         return sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis(**params)
 
+    if clazz == sklearn.linear_model.LogisticRegression:
+        params["dual"] = check_for_bool(params["dual"])
+        return sklearn.linear_model.LogisticRegression(**params)
+
     if clazz == sklearn.neural_network.MLPClassifier:
         max_iter = 512  # hard coded in auto-sklearn
         hidden_layer_depth = int(params["hidden_layer_depth"])
