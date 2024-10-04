@@ -86,13 +86,13 @@ naml = naiveautoml.NaiveAutoML(scoring="accuracy", passive_scorings=["neg_log_lo
 You can also pass a custom scoring function through a dictionary:
 
 ```python
-scorer = make_scorer(**{
+scorer = {
             "name": "accuracy",
             "score_func": lambda y, y_pred: np.count_nonzero(y == y_pred).mean(),
             "greater_is_better": True,
             "needs_proba": False,
             "needs_threshold": False
-        })
+         }
 naml = naiveautoml.NaiveAutoML(scoring=scorer)
 ```
 
