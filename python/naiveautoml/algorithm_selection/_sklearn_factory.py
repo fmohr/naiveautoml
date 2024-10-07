@@ -663,7 +663,7 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y, random_state=None)
         return sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis(**params)
 
     if clazz == sklearn.linear_model.LogisticRegression:
-        #params["dual"] = check_for_bool(params["dual"])  # disabled now
+        # params["dual"] = check_for_bool(params["dual"]) -- disabled now
         return sklearn.linear_model.LogisticRegression(**params)
 
     if clazz == sklearn.neural_network.MLPClassifier:
