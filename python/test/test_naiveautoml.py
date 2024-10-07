@@ -1,7 +1,7 @@
 import logging
 
 import pytest
-from sklearn.metrics import get_scorer
+from sklearn.metrics import get_scorer, make_scorer
 
 import naiveautoml
 import numpy as np
@@ -123,6 +123,37 @@ class TestNaiveAutoML(unittest.TestCase):
             max_hpo_iterations=1,
             show_progress=True,
             raise_errors=True
+        )
+        naml.fit(X, y)
+        
+    @parameterized.expand([
+        (61, True),
+        (61, False),
+    ])
+    def test_acceptance_of_custom_scoring(self, openmlid, use_make_scorer):        
+        scoring = make_scorer(**{
+            "name": "custom_scorer",
+            "score_func": lambda y, y_pred: np.random.rand(), # custom scorer with a random score as result, just to test if it is accepted
+            "greater_is_better": True,
+            "needs_proba": True,
+            "needs_threshold": False,
+        }) if use_make_scorer else {
+            "name": "custom_scorer",
+            "score_func": lambda y, y_pred: np.random.rand(), # custom scorer with a random score as result, just to test if it is accepted
+            "greater_is_better": True,
+            "needs_proba": True,
+            "needs_threshold": False,
+        }
+        
+        self.logger.info(f"Testing acceptance of dataframes")
+        X, y = get_dataset(openmlid, as_numpy=False)
+        naml = naiveautoml.NaiveAutoML(
+            logger_name="naml",
+            timeout_overall=15,
+            max_hpo_iterations=1,
+            show_progress=True,
+            raise_errors=True,
+            scoring=scoring
         )
         naml.fit(X, y)
         

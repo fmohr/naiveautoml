@@ -10,6 +10,7 @@ import time
 from tqdm import tqdm
 
 from sklearn.utils.multiclass import type_of_target
+from sklearn.metrics._scorer import _BaseScorer
 
 
 class SupervisedTask:
@@ -43,14 +44,22 @@ class SupervisedTask:
 
         # configure scorings
         def prepare_scoring(scoring):
+            if isinstance(scoring, str):
+                name = scoring
+            elif isinstance(scoring, _BaseScorer):
+                name = scoring._score_func.__name__
+            else:
+                name = scoring["name"]
             out = {
-                "name": scoring if isinstance(scoring, str) else scoring["name"]
+                "name": name
             }
             if type_of_target(self._y) == "multilabel-indicator":
                 out["fun"] = None
             else:
                 if isinstance(scoring, str):
                     out["fun"] = get_scorer(scoring)
+                elif isinstance(scoring, _BaseScorer):
+                    out["fun"] = scoring
                 else:
                     out["fun"] = make_scorer(**{key: val for key, val in scoring.items() if key != "name"})
             return out
