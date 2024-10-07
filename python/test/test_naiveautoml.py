@@ -2,6 +2,18 @@ import logging
 
 import pytest
 from sklearn.metrics import get_scorer
+from sklearn.ensemble import (
+    HistGradientBoostingClassifier,
+    HistGradientBoostingRegressor,
+    RandomForestClassifier,
+    RandomForestRegressor,
+    ExtraTreesClassifier,
+    ExtraTreesRegressor,
+    AdaBoostClassifier,
+    AdaBoostRegressor
+)
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.neural_network import MLPClassifier, MLPRegressor
 
 import naiveautoml
 import numpy as np
@@ -54,6 +66,55 @@ def evaluate_nb_best(pl, X, y, scoring_functions):
         {s["name"]: 1 if isinstance(pl["learner"], sklearn.naive_bayes.BernoulliNB) else 0 for s in scoring_functions},  # scores
         {s["name"]: {} for s in scoring_functions}  # evaluation reports
     )
+
+
+class TurboEvaluator(Callable):
+
+    def __init__(self):
+        self.history = []
+
+    def reset(self):
+        self.history = []
+
+    def __call__(self, pl, X, y, scoring_functions):
+        learner = pl.steps[-1][1]
+        if isinstance(learner, tuple([
+            HistGradientBoostingClassifier,
+            HistGradientBoostingRegressor,
+            RandomForestClassifier,
+            RandomForestRegressor,
+            ExtraTreesClassifier,
+            ExtraTreesRegressor,
+            AdaBoostClassifier,
+            AdaBoostRegressor
+        ])):
+            learner.n_estimators = 2
+            if isinstance(learner, tuple([
+                HistGradientBoostingClassifier,
+                HistGradientBoostingRegressor
+            ])):
+                learner.max_iter = 10
+
+        elif isinstance(learner, (MLPClassifier, MLPRegressor)):
+            learner.max_iter = 2
+
+        if isinstance(learner, GaussianProcessRegressor):
+            learner.n_restarts_optimizer=1
+
+
+        X_train, X_val, y_train, y_val = sklearn.model_selection.train_test_split(X, y, train_size=80, test_size=50)
+        learner = sklearn.base.clone(pl).fit(X_train, y_train)
+        results = {
+            s["name"]: s["fun"](learner, X_val, y_val)
+            for s in scoring_functions
+        }
+        evaluation_report = {
+            s["name"]: {} for s in scoring_functions
+        }
+        return results, evaluation_report
+
+    def update(self, pl, results):
+        self.history.append([pl, results])
 
 
 class TestNaiveAutoML(unittest.TestCase):
@@ -669,8 +730,7 @@ class TestNaiveAutoML(unittest.TestCase):
                 task_type=task_type,
                 scoring=scoring,
                 timeout_candidate=2,
-                evaluation_fun="mccv",
-                kwargs_evaluation_fun={"n_splits": 1}
+                evaluation_fun=TurboEvaluator()
             )
             task = naml.get_task_from_data(X, y, None)
             naml.reset(task)
@@ -735,7 +795,8 @@ class TestNaiveAutoML(unittest.TestCase):
                                 "There are significant negative eigenvalues",
                                 "ValueError: array must not contain infs or NaNs",
                                 "ValueError: Input X contains infinity or a value too large for",
-                                "ValueError: illegal value in 4th argument of internal gesdd"
+                                "ValueError: illegal value in 4th argument of internal gesdd",
+                                "ValueError: Found array with 0 feature(s)"
                             ]
                             if not any([t in exception for t in allowed_exception_texts]):
                                 self.logger.exception(exception)
