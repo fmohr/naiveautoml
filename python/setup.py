@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'naiveautoml',
   packages = find_packages(exclude=["test"]),
-  version = '0.1.3',
+  version = '0.1.5',
   license='MIT',
   description = 'Fast and Timeout-Free Automated Machine Learning for Multi-Class classification, Multi-Label classification, and regression.',
   author = 'Felix Mohr',
@@ -12,11 +12,11 @@ setup(
   url = 'https://github.com/fmohr/naiveautoml',
   keywords = ['AutoML', 'sklearn', 'naive', 'simple', 'multi-class', 'multi-label', 'regression', 'no timeouts'],
   install_requires=[
-          'numpy==1.26.4',
+          'numpy<2',
           'pandas',
-          'scikit-learn==1.4.2',
+          'scikit-learn==1.5.2',
           'scikit-multilearn==0.2.0',
-          'configspace<0.7.1',
+          'configspace==1.2.0',
           'scipy',
           'pynisher',
           'psutil',
