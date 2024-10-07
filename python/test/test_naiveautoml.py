@@ -1,7 +1,7 @@
 import logging
 
 import pytest
-from sklearn.metrics import get_scorer
+from sklearn.metrics import get_scorer, make_scorer
 from sklearn.ensemble import (
     HistGradientBoostingClassifier,
     HistGradientBoostingRegressor,
@@ -553,21 +553,24 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Testing individual scoring function on dataset {openml}")
         
-        scoring1 = {
-            "name": "accuracy",
-            "score_func": lambda y, y_pred: np.count_nonzero(y == y_pred) / len(y),
-            "greater_is_better": True,
-            "needs_proba": False,
-            "needs_threshold": False
-        }
-        scoring2 = {
-            "name": "errorrate",
-            "score_func": lambda y, y_pred: np.count_nonzero(y != y_pred) / len(y),
-            "greater_is_better": False,
-            "needs_proba": False,
-            "needs_threshold": False
-        }
-        scorer = sklearn.metrics.make_scorer(**{k: v for k, v in scoring1.items() if k != "name"})
+        scoring1 = (
+            "accuracy",
+            make_scorer(
+                score_func=lambda y, y_pred: np.count_nonzero(y == y_pred) / len(y),
+                greater_is_better=True,
+                response_method="predict"
+            )
+        )
+
+        scoring2 = (
+            "errorrate",
+            make_scorer(
+                score_func=lambda y, y_pred: np.count_nonzero(y != y_pred) / len(y),
+                greater_is_better=False,
+                response_method="predict"
+            )
+        )
+        scorer = scoring1[1]
 
         # run naml
         scores = []
@@ -596,6 +599,7 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # compute test performance
             self.logger.debug(f"finished training on seed {seed} after {int(np.round(runtime))}s. Now computing performance of solution.")
+            print(scorer)
             score = scorer(naml, X_test, y_test)
             scores.append(score)
             self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")

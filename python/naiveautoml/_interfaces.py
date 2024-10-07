@@ -43,8 +43,16 @@ class SupervisedTask:
 
         # configure scorings
         def prepare_scoring(scoring):
+
+            is_str = isinstance(scoring, str)
+            is_tuple = isinstance(scoring, tuple)
+            if not is_str and not is_tuple:
+                raise ValueError(f"scoring must be either str or tuple but is {type(scoring)}")
+            if is_tuple and len(scoring) != 2:
+                raise ValueError(f"if scoring is a tuple, it must contain 2 elements, a name and the scoring function")
+
             out = {
-                "name": scoring if isinstance(scoring, str) else scoring["name"]
+                "name": scoring if isinstance(scoring, str) else scoring[0]
             }
             if type_of_target(self._y) == "multilabel-indicator":
                 out["fun"] = None
@@ -52,7 +60,7 @@ class SupervisedTask:
                 if isinstance(scoring, str):
                     out["fun"] = get_scorer(scoring)
                 else:
-                    out["fun"] = make_scorer(**{key: val for key, val in scoring.items() if key != "name"})
+                    out["fun"] = scoring[1]
             return out
 
         if scoring is None:
