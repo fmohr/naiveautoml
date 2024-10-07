@@ -4,7 +4,7 @@ from typing import Callable
 import numpy as np
 from scipy.sparse import issparse, spmatrix
 from ConfigSpace import ConfigurationSpace
-from sklearn.metrics import get_scorer, make_scorer
+from sklearn.metrics import get_scorer
 import pandas as pd
 import time
 from tqdm import tqdm
@@ -49,7 +49,7 @@ class SupervisedTask:
             if not is_str and not is_tuple:
                 raise ValueError(f"scoring must be either str or tuple but is {type(scoring)}")
             if is_tuple and len(scoring) != 2:
-                raise ValueError(f"if scoring is a tuple, it must contain 2 elements, a name and the scoring function")
+                raise ValueError("if scoring is a tuple, it must contain 2 elements, a name and the scoring function")
 
             out = {
                 "name": scoring if isinstance(scoring, str) else scoring[0]
