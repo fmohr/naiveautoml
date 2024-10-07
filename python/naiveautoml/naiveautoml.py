@@ -234,8 +234,11 @@ class NaiveAutoML:
 
             # get candidate descriptor
             as_result_for_best_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
+            config_space = self.algorithm_selector.get_config_space(as_result_for_best_candidate)
 
-            if (
+            if len(config_space) == 0:
+                self.logger.info(f"The selected algorithms {as_result_for_best_candidate} have no hyperparameters.")
+            elif (
                     deadline is None or
                     deadline is not None and deadline - time.time() >= as_result_for_best_candidate["runtime"] + 5
             ):
@@ -244,7 +247,7 @@ class NaiveAutoML:
                 self.hp_optimizer.reset(
                     task=self.task,
                     runtime_of_default_config=as_result_for_best_candidate["runtime"],
-                    config_space=self.algorithm_selector.get_config_space(as_result_for_best_candidate),
+                    config_space=config_space,
                     history_descriptor_creation_fun=lambda hp_config: self.algorithm_selector.create_history_descriptor(
                         as_result_for_best_candidate,
                         hp_config

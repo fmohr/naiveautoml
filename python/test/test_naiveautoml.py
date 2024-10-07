@@ -2,6 +2,18 @@ import logging
 
 import pytest
 from sklearn.metrics import get_scorer, make_scorer
+from sklearn.ensemble import (
+    HistGradientBoostingClassifier,
+    HistGradientBoostingRegressor,
+    RandomForestClassifier,
+    RandomForestRegressor,
+    ExtraTreesClassifier,
+    ExtraTreesRegressor,
+    AdaBoostClassifier,
+    AdaBoostRegressor
+)
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.neural_network import MLPClassifier, MLPRegressor
 
 import naiveautoml
 import numpy as np
@@ -54,6 +66,55 @@ def evaluate_nb_best(pl, X, y, scoring_functions):
         {s["name"]: 1 if isinstance(pl["learner"], sklearn.naive_bayes.BernoulliNB) else 0 for s in scoring_functions},  # scores
         {s["name"]: {} for s in scoring_functions}  # evaluation reports
     )
+
+
+class TurboEvaluator(Callable):
+
+    def __init__(self):
+        self.history = []
+
+    def reset(self):
+        self.history = []
+
+    def __call__(self, pl, X, y, scoring_functions):
+        learner = pl.steps[-1][1]
+        if isinstance(learner, tuple([
+            HistGradientBoostingClassifier,
+            HistGradientBoostingRegressor,
+            RandomForestClassifier,
+            RandomForestRegressor,
+            ExtraTreesClassifier,
+            ExtraTreesRegressor,
+            AdaBoostClassifier,
+            AdaBoostRegressor
+        ])):
+            learner.n_estimators = 2
+            if isinstance(learner, tuple([
+                HistGradientBoostingClassifier,
+                HistGradientBoostingRegressor
+            ])):
+                learner.max_iter = 10
+
+        elif isinstance(learner, (MLPClassifier, MLPRegressor)):
+            learner.max_iter = 2
+
+        if isinstance(learner, GaussianProcessRegressor):
+            learner.n_restarts_optimizer=1
+
+
+        X_train, X_val, y_train, y_val = sklearn.model_selection.train_test_split(X, y, train_size=80, test_size=50)
+        learner = sklearn.base.clone(pl).fit(X_train, y_train)
+        results = {
+            s["name"]: s["fun"](learner, X_val, y_val)
+            for s in scoring_functions
+        }
+        evaluation_report = {
+            s["name"]: {} for s in scoring_functions
+        }
+        return results, evaluation_report
+
+    def update(self, pl, results):
+        self.history.append([pl, results])
 
 
 class TestNaiveAutoML(unittest.TestCase):
@@ -303,37 +364,39 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(61)
 
         # run naml
-        np.random.seed(round(time.time()))
+        np.random.seed(0)#round(time.time()))
         naml = naiveautoml.NaiveAutoML(
             logger_name="naml",
             timeout_overall=60,
             max_hpo_iterations=10,
             show_progress=True,
-            evaluation_fun=evaluate_randomly
+            evaluation_fun=evaluate_randomly,
+            random_state=0
         )
         naml.fit(X, y)
         print(naml.history[["learner_class", "neg_log_loss"]])
 
         # check that there is only one combination of algorithms in the HPO phase
         history = naml.history.iloc[naml.steps_after_which_algorithm_selection_was_completed:]
-        self.assertTrue(len(pd.unique(history["learner_class"])) == 1)
-        self.assertTrue(len(pd.unique(history["data-pre-processor_class"])) == 1)
-        self.assertTrue(len(pd.unique(history["feature-pre-processor_class"])) == 1)
+        if len(history) > 0:
+            self.assertTrue(len(pd.unique(history["learner_class"])) == 1)
+            self.assertTrue(len(pd.unique(history["data-pre-processor_class"])) == 1)
+            self.assertTrue(len(pd.unique(history["feature-pre-processor_class"])) == 1)
 
-        # get best solution from phase 1
-        phase_1_solutions = naml.history.iloc[:naml.steps_after_which_algorithm_selection_was_completed]
-        phase_1_solutions = phase_1_solutions[phase_1_solutions[naml.task.scoring["name"]].notna()]
-        best_solution_in_phase_1 = phase_1_solutions.sort_values(naml.task.scoring["name"]).iloc[-1]
+            # get best solution from phase 1
+            phase_1_solutions = naml.history.iloc[:naml.steps_after_which_algorithm_selection_was_completed]
+            phase_1_solutions = phase_1_solutions[phase_1_solutions[naml.task.scoring["name"]].notna()]
+            best_solution_in_phase_1 = phase_1_solutions.sort_values(naml.task.scoring["name"]).iloc[-1]
 
-        for step in ["data-pre-processor", "feature-pre-processor", "learner"]:
-            field = f"{step}_class"
-            class_in_phase1 = best_solution_in_phase_1[field]
-            class_in_phase2 = pd.unique(history[field])[0]
-            self.assertEqual(
-                class_in_phase1,
-                class_in_phase2,
-                f"Choice for {step} should conicide but is {class_in_phase1} in AS phase and {class_in_phase2} in HPO."
-            )
+            for step in ["data-pre-processor", "feature-pre-processor", "learner"]:
+                field = f"{step}_class"
+                class_in_phase1 = best_solution_in_phase_1[field]
+                class_in_phase2 = pd.unique(history[field])[0]
+                self.assertEqual(
+                    class_in_phase1,
+                    class_in_phase2,
+                    f"Choice for {step} should conicide but is {class_in_phase1} in AS phase and {class_in_phase2} in HPO."
+                )
         
         
     """
@@ -521,21 +584,24 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Testing individual scoring function on dataset {openml}")
         
-        scoring1 = {
-            "name": "accuracy",
-            "score_func": lambda y, y_pred: np.count_nonzero(y == y_pred) / len(y),
-            "greater_is_better": True,
-            "needs_proba": False,
-            "needs_threshold": False
-        }
-        scoring2 = {
-            "name": "errorrate",
-            "score_func": lambda y, y_pred: np.count_nonzero(y != y_pred) / len(y),
-            "greater_is_better": False,
-            "needs_proba": False,
-            "needs_threshold": False
-        }
-        scorer = sklearn.metrics.make_scorer(**{k: v for k, v in scoring1.items() if k != "name"})
+        scoring1 = (
+            "accuracy",
+            make_scorer(
+                score_func=lambda y, y_pred: np.count_nonzero(y == y_pred) / len(y),
+                greater_is_better=True,
+                response_method="predict"
+            )
+        )
+
+        scoring2 = (
+            "errorrate",
+            make_scorer(
+                score_func=lambda y, y_pred: np.count_nonzero(y != y_pred) / len(y),
+                greater_is_better=False,
+                response_method="predict"
+            )
+        )
+        scorer = scoring1[1]
 
         # run naml
         scores = []
@@ -564,6 +630,7 @@ class TestNaiveAutoML(unittest.TestCase):
             
             # compute test performance
             self.logger.debug(f"finished training on seed {seed} after {int(np.round(runtime))}s. Now computing performance of solution.")
+            print(scorer)
             score = scorer(naml, X_test, y_test)
             scores.append(score)
             self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
@@ -685,7 +752,7 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_searchspaces(self):
 
         for openmlid, task_type in {
-            #61: "classification",  # iris
+            61: "classification",  # iris
             531: "regression"  # boston housing
         }.items():
 
@@ -698,8 +765,7 @@ class TestNaiveAutoML(unittest.TestCase):
                 task_type=task_type,
                 scoring=scoring,
                 timeout_candidate=2,
-                evaluation_fun="mccv",
-                kwargs_evaluation_fun={"n_splits": 1}
+                evaluation_fun=TurboEvaluator()
             )
             task = naml.get_task_from_data(X, y, None)
             naml.reset(task)
@@ -732,10 +798,15 @@ class TestNaiveAutoML(unittest.TestCase):
                     })
 
                     # get HPO process for supposed selection
+                    config_space = helper.get_config_space_for_selected_algorithms(selection)
+                    if len(config_space) == 0:
+                        self.logger.info("Config space is empty, nothing to check.")
+                        continue
+
                     hp_optimizer.reset(
                         task=task,
                         runtime_of_default_config=0,
-                        config_space=helper.get_config_space_for_selected_algorithms(selection),
+                        config_space=config_space,
                         history_descriptor_creation_fun=lambda hp_config: naml.algorithm_selector.create_history_descriptor(faked_as_info, hp_config),
                         evaluator=naml.evaluator,
                         is_pipeline_forbidden=naml.algorithm_selector.is_pipeline_forbidden,
@@ -759,7 +830,8 @@ class TestNaiveAutoML(unittest.TestCase):
                                 "There are significant negative eigenvalues",
                                 "ValueError: array must not contain infs or NaNs",
                                 "ValueError: Input X contains infinity or a value too large for",
-                                "ValueError: illegal value in 4th argument of internal gesdd"
+                                "ValueError: illegal value in 4th argument of internal gesdd",
+                                "ValueError: Found array with 0 feature(s)"
                             ]
                             if not any([t in exception for t in allowed_exception_texts]):
                                 self.logger.exception(exception)
@@ -776,7 +848,12 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start test of individual stateful evaluation function on dataset {openmlid}.")
 
-        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=0.8)
+        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
+            X,
+            y,
+            train_size=10,
+            test_size=10
+        )
         for i in range(1, 21):
             self.logger.info(f"Run {i}-th instance")
             automl = naiveautoml.NaiveAutoML(

@@ -42,7 +42,7 @@
                             "log": false,
                             "lower": 10,
                             "upper": 2000,
-                            "default": 1000
+                            "default_value": 1000
                         },
                         {
                             "name": "output_distribution",
@@ -51,7 +51,7 @@
                                 "uniform",
                                 "normal"
                             ],
-                            "default": "uniform",
+                            "default_value": "uniform",
                             "probabilities": null
                         }
                     ],
@@ -71,7 +71,7 @@
                             "log": false,
                             "lower": 0.7,
                             "upper": 0.999,
-                            "default": 0.75
+                            "default_value": 0.75
                         },
                         {
                             "name": "q_min",
@@ -79,7 +79,7 @@
                             "log": false,
                             "lower": 0.001,
                             "upper": 0.3,
-                            "default": 0.25
+                            "default_value": 0.25
                         }
                     ],
                     "conditions": [],
@@ -124,7 +124,7 @@
                                 "parallel",
                                 "deflation"
                             ],
-                            "default": "parallel",
+                            "default_value": "parallel",
                             "probabilities": null
                         },
                         {
@@ -135,7 +135,7 @@
                                 "exp",
                                 "cube"
                             ],
-                            "default": "logcosh",
+                            "default_value": "logcosh",
                             "probabilities": null
                         },
                         {
@@ -146,7 +146,7 @@
                                 "arbitrary-variance",
                                 "unit-variance"
                             ],
-                            "default": "False",
+                            "default_value": "False",
                             "probabilities": null
                         },
                         {
@@ -155,7 +155,7 @@
                             "log": false,
                             "lower": 10,
                             "upper": 2000,
-                            "default": 100
+                            "default_value": 100
                         }
                     ],
                     "conditions": [
@@ -185,7 +185,7 @@
                                 "l1",
                                 "l2"
                             ],
-                            "default": "euclidean",
+                            "default_value": "euclidean",
                             "probabilities": null
                         },
                         {
@@ -196,7 +196,7 @@
                                 "complete",
                                 "average"
                             ],
-                            "default": "ward",
+                            "default_value": "ward",
                             "probabilities": null
                         },
                         {
@@ -205,7 +205,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 400,
-                            "default": 25
+                            "default_value": 25
                         },
                         {
                             "name": "pooling_func",
@@ -215,7 +215,7 @@
                                 "median",
                                 "max"
                             ],
-                            "default": "mean",
+                            "default_value": "mean",
                             "probabilities": null
                         }
                     ],
@@ -260,7 +260,7 @@
                                 "sigmoid",
                                 "cosine"
                             ],
-                            "default": "rbf",
+                            "default_value": "rbf",
                             "probabilities": null
                         },
                         {
@@ -269,7 +269,7 @@
                             "log": false,
                             "lower": 10,
                             "upper": 2000,
-                            "default": 100
+                            "default_value": 100
                         },
                         {
                             "name": "coef0",
@@ -277,7 +277,7 @@
                             "log": false,
                             "lower": -1.0,
                             "upper": 1.0,
-                            "default": 0.0
+                            "default_value": 0.0
                         },
                         {
                             "name": "degree",
@@ -285,7 +285,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 5,
-                            "default": 3
+                            "default_value": 3
                         },
                         {
                             "name": "gamma",
@@ -293,7 +293,7 @@
                             "log": true,
                             "lower": 3.0517578125e-05,
                             "upper": 8.0,
-                            "default": 0.01
+                            "default_value": 0.01
                         }
                     ],
                     "conditions": [
@@ -337,7 +337,7 @@
                             "log": true,
                             "lower": 3.0517578125e-05,
                             "upper": 8.0,
-                            "default": 1.0
+                            "default_value": 1.0
                         },
                         {
                             "name": "n_components",
@@ -345,7 +345,7 @@
                             "log": true,
                             "lower": 50,
                             "upper": 10000,
-                            "default": 100
+                            "default_value": 100
                         }
                     ],
                     "conditions": [],
@@ -368,7 +368,7 @@
                                 "cosine",
                                 "chi2"
                             ],
-                            "default": "rbf",
+                            "default_value": "rbf",
                             "probabilities": null
                         },
                         {
@@ -377,7 +377,7 @@
                             "log": true,
                             "lower": 50,
                             "upper": 10000,
-                            "default": 100
+                            "default_value": 100
                         },
                         {
                             "name": "coef0",
@@ -385,7 +385,7 @@
                             "log": false,
                             "lower": -1.0,
                             "upper": 1.0,
-                            "default": 0.0
+                            "default_value": 0.0
                         },
                         {
                             "name": "degree",
@@ -393,7 +393,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 5,
-                            "default": 3
+                            "default_value": 3
                         },
                         {
                             "name": "gamma",
@@ -401,7 +401,7 @@
                             "log": true,
                             "lower": 3.0517578125e-05,
                             "upper": 8.0,
-                            "default": 0.1
+                            "default_value": 0.1
                         }
                     ],
                     "conditions": [
@@ -447,7 +447,7 @@
                             "log": false,
                             "lower": 0.5,
                             "upper": 0.9999,
-                            "default": 0.9999
+                            "default_value": 0.9999
                         },
                         {
                             "name": "whiten",
@@ -456,7 +456,7 @@
                                 "False",
                                 "True"
                             ],
-                            "default": "False",
+                            "default_value": "False",
                             "probabilities": null
                         }
                     ],
@@ -476,7 +476,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 3,
-                            "default": 2
+                            "default_value": 2
                         },
                         {
                             "name": "include_bias",
@@ -485,7 +485,7 @@
                                 "True",
                                 "False"
                             ],
-                            "default": "True",
+                            "default_value": "True",
                             "probabilities": null
                         },
                         {
@@ -495,7 +495,7 @@
                                 "False",
                                 "True"
                             ],
-                            "default": "False",
+                            "default_value": "False",
                             "probabilities": null
                         }
                     ],
@@ -521,7 +521,7 @@
                                 "True",
                                 "False"
                             ],
-                            "default": "False",
+                            "default_value": "False",
                             "probabilities": null
                         },
                         {
@@ -533,7 +533,7 @@
                                 "absolute_error",
                                 "squared_error"
                             ],
-                            "default": "squared_error",
+                            "default_value": "squared_error",
                             "probabilities": null
                         },
                         {
@@ -547,7 +547,7 @@
                             "log": false,
                             "lower": 0.1,
                             "upper": 1.0,
-                            "default": 1.0
+                            "default_value": 1.0
                         },
                         {
                             "name": "max_leaf_nodes",
@@ -565,7 +565,7 @@
                             "log": false,
                             "lower": 1,
                             "upper": 20,
-                            "default": 1
+                            "default_value": 1
                         },
                         {
                             "name": "min_samples_split",
@@ -573,7 +573,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 20,
-                            "default": 2
+                            "default_value": 2
                         },
                         {
                             "name": "min_weight_fraction_leaf",
@@ -598,7 +598,7 @@
                                 "True",
                                 "False"
                             ],
-                            "default": "True",
+                            "default_value": "True",
                             "probabilities": null
                         },
                         {
@@ -610,7 +610,7 @@
                                 "poisson",
                                 "absolute_error"
                             ],
-                            "default": "squared_error",
+                            "default_value": "squared_error",
                             "probabilities": null
                         },
                         {
@@ -624,7 +624,7 @@
                             "log": false,
                             "lower": 0.1,
                             "upper": 1.0,
-                            "default": 1.0
+                            "default_value": 1.0
                         },
                         {
                             "name": "max_leaf_nodes",
@@ -642,7 +642,7 @@
                             "log": false,
                             "lower": 1,
                             "upper": 20,
-                            "default": 1
+                            "default_value": 1
                         },
                         {
                             "name": "min_samples_split",
@@ -650,7 +650,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 20,
-                            "default": 2
+                            "default_value": 2
                         },
                         {
                             "name": "min_weight_fraction_leaf",
@@ -676,7 +676,7 @@
                                 "valid",
                                 "train"
                             ],
-                            "default": "off",
+                            "default_value": "off",
                             "probabilities": null
                         },
                         {
@@ -685,7 +685,7 @@
                             "log": true,
                             "lower": 1e-10,
                             "upper": 1.0,
-                            "default": 1e-10
+                            "default_value": 1e-10
                         },
                         {
                             "name": "learning_rate",
@@ -693,7 +693,7 @@
                             "log": true,
                             "lower": 0.01,
                             "upper": 1.0,
-                            "default": 0.1
+                            "default_value": 0.1
                         },
                         {
                             "name": "loss",
@@ -705,7 +705,7 @@
                                 "gamma",
                                 "squared_error"
                             ],
-                            "default": "squared_error",
+                            "default_value": "squared_error",
                             "probabilities": null
                         },
                         {
@@ -724,7 +724,7 @@
                             "log": true,
                             "lower": 3,
                             "upper": 2047,
-                            "default": 31
+                            "default_value": 31
                         },
                         {
                             "name": "min_samples_leaf",
@@ -732,7 +732,7 @@
                             "log": true,
                             "lower": 1,
                             "upper": 200,
-                            "default": 20
+                            "default_value": 20
                         },
                         {
                             "name": "scoring",
@@ -750,7 +750,7 @@
                             "log": false,
                             "lower": 1,
                             "upper": 20,
-                            "default": 10
+                            "default_value": 10
                         },
                         {
                             "name": "validation_fraction",
@@ -758,7 +758,7 @@
                             "log": false,
                             "lower": 0.01,
                             "upper": 0.4,
-                            "default": 0.1
+                            "default_value": 0.1
                         },
                         {
                             "name": "quantile",
@@ -766,7 +766,7 @@
                             "log": false,
                             "lower": 0.01,
                             "upper": 0.99,
-                            "default": 0.5
+                            "default_value": 0.5
                         }
                     ],
                     "conditions": [
@@ -810,7 +810,7 @@
                                 "absolute_error",
                                 "squared_error"
                             ],
-                            "default": "squared_error",
+                            "default_value": "squared_error",
                             "probabilities": null
                         },
                         {
@@ -819,7 +819,7 @@
                             "log": false,
                             "lower": 0.0,
                             "upper": 2.0,
-                            "default": 0.5
+                            "default_value": 0.5
                         },
                         {
                             "name": "max_features",
@@ -842,7 +842,7 @@
                             "log": false,
                             "lower": 1,
                             "upper": 20,
-                            "default": 1
+                            "default_value": 1
                         },
                         {
                             "name": "min_samples_split",
@@ -850,7 +850,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 20,
-                            "default": 2
+                            "default_value": 2
                         },
                         {
                             "name": "min_weight_fraction_leaf",
@@ -874,7 +874,7 @@
                             "log": false,
                             "lower": 1e-10,
                             "upper": 0.001,
-                            "default": 1e-06
+                            "default_value": 1e-06
                         },
                         {
                             "name": "alpha_2",
@@ -882,7 +882,7 @@
                             "log": true,
                             "lower": 1e-10,
                             "upper": 0.001,
-                            "default": 1e-06
+                            "default_value": 1e-06
                         },
                         {
                             "name": "fit_intercept",
@@ -895,7 +895,7 @@
                             "log": true,
                             "lower": 1e-10,
                             "upper": 0.001,
-                            "default": 1e-06
+                            "default_value": 1e-06
                         },
                         {
                             "name": "lambda_2",
@@ -903,10 +903,10 @@
                             "log": true,
                             "lower": 1e-10,
                             "upper": 0.001,
-                            "default": 1e-06
+                            "default_value": 1e-06
                         },
                         {
-                            "name": "n_iter",
+                            "name": "max_iter",
                             "type": "constant",
                             "value": 300
                         },
@@ -916,7 +916,7 @@
                             "log": true,
                             "lower": 1000.0,
                             "upper": 100000.0,
-                            "default": 10000.0
+                            "default_value": 10000.0
                         },
                         {
                             "name": "tol",
@@ -924,7 +924,7 @@
                             "log": true,
                             "lower": 1e-05,
                             "upper": 0.1,
-                            "default": 0.001
+                            "default_value": 0.001
                         }
                     ],
                     "conditions": [],
@@ -943,7 +943,7 @@
                             "log": true,
                             "lower": 1e-10,
                             "upper": 1.0,
-                            "default": 1e-08
+                            "default_value": 1e-08
                         },
                         {
                             "name": "thetaL",
@@ -951,7 +951,7 @@
                             "log": true,
                             "lower": 1e-10,
                             "upper": 0.001,
-                            "default": 1e-06
+                            "default_value": 1e-06
                         },
                         {
                             "name": "thetaU",
@@ -959,7 +959,7 @@
                             "log": true,
                             "lower": 1.0,
                             "upper": 100000.0,
-                            "default": 100000.0
+                            "default_value": 100000.0
                         }
                     ],
                     "conditions": [],
@@ -978,7 +978,7 @@
                             "log": true,
                             "lower": 1,
                             "upper": 100,
-                            "default": 1
+                            "default_value": 1
                         },
                         {
                             "name": "p",
@@ -987,7 +987,7 @@
                                 1,
                                 2
                             ],
-                            "default": 2,
+                            "default_value": 2,
                             "probabilities": null
                         },
                         {
@@ -997,7 +997,7 @@
                                 "uniform",
                                 "distance"
                             ],
-                            "default": "uniform",
+                            "default_value": "uniform",
                             "probabilities": null
                         }
                     ],
@@ -1017,7 +1017,7 @@
                             "log": true,
                             "lower": 0.03125,
                             "upper": 32768.0,
-                            "default": 1.0
+                            "default_value": 1.0
                         },
                         {
                             "name": "dual",
@@ -1030,7 +1030,7 @@
                             "log": true,
                             "lower": 0.001,
                             "upper": 1.0,
-                            "default": 0.1
+                            "default_value": 0.1
                         },
                         {
                             "name": "fit_intercept",
@@ -1049,7 +1049,7 @@
                                 "epsilon_insensitive",
                                 "squared_epsilon_insensitive"
                             ],
-                            "default": "squared_epsilon_insensitive",
+                            "default_value": "squared_epsilon_insensitive",
                             "probabilities": null
                         },
                         {
@@ -1058,7 +1058,7 @@
                             "log": true,
                             "lower": 1e-05,
                             "upper": 0.1,
-                            "default": 0.0001
+                            "default_value": 0.0001
                         }
                     ],
                     "conditions": [],
@@ -1094,7 +1094,7 @@
                             "log": true,
                             "lower": 0.01,
                             "upper": 2.0,
-                            "default": 0.1
+                            "default_value": 0.1
                         },
                         {
                             "name": "loss",
@@ -1104,7 +1104,7 @@
                                 "square",
                                 "exponential"
                             ],
-                            "default": "linear",
+                            "default_value": "linear",
                             "probabilities": null
                         },
                         {
@@ -1113,7 +1113,7 @@
                             "log": false,
                             "lower": 1,
                             "upper": 10,
-                            "default": 1
+                            "default_value": 1
                         },
                         {
                             "name": "n_estimators",
@@ -1121,7 +1121,7 @@
                             "log": false,
                             "lower": 50,
                             "upper": 500,
-                            "default": 50
+                            "default_value": 50
                         }
                     ],
                     "conditions": [],
@@ -1140,7 +1140,7 @@
                             "log": true,
                             "lower": 0.03125,
                             "upper": 32768.0,
-                            "default": 1.0
+                            "default_value": 1.0
                         },
                         {
                             "name": "epsilon",
@@ -1148,7 +1148,7 @@
                             "log": true,
                             "lower": 0.001,
                             "upper": 1.0,
-                            "default": 0.1
+                            "default_value": 0.1
                         },
                         {
                             "name": "kernel",
@@ -1159,7 +1159,7 @@
                                 "rbf",
                                 "sigmoid"
                             ],
-                            "default": "rbf",
+                            "default_value": "rbf",
                             "probabilities": null
                         },
                         {
@@ -1174,7 +1174,7 @@
                                 "True",
                                 "False"
                             ],
-                            "default": "True",
+                            "default_value": "True",
                             "probabilities": null
                         },
                         {
@@ -1183,7 +1183,7 @@
                             "log": true,
                             "lower": 1e-05,
                             "upper": 0.1,
-                            "default": 0.001
+                            "default_value": 0.001
                         },
                         {
                             "name": "coef0",
@@ -1191,7 +1191,7 @@
                             "log": false,
                             "lower": -1.0,
                             "upper": 1.0,
-                            "default": 0.0
+                            "default_value": 0.0
                         },
                         {
                             "name": "degree",
@@ -1199,7 +1199,7 @@
                             "log": false,
                             "lower": 2,
                             "upper": 5,
-                            "default": 3
+                            "default_value": 3
                         },
                         {
                             "name": "gamma",
@@ -1207,7 +1207,7 @@
                             "log": true,
                             "lower": 3.0517578125e-05,
                             "upper": 8.0,
-                            "default": 0.1
+                            "default_value": 0.1
                         }
                     ],
                     "conditions": [
@@ -1256,7 +1256,7 @@
                                 "tanh",
                                 "relu"
                             ],
-                            "default": "tanh",
+                            "default_value": "tanh",
                             "probabilities": null
                         },
                         {
@@ -1265,7 +1265,7 @@
                             "log": true,
                             "lower": 1e-07,
                             "upper": 0.1,
-                            "default": 0.0001
+                            "default_value": 0.0001
                         },
                         {
                             "name": "batch_size",
@@ -1289,7 +1289,7 @@
                                 "valid",
                                 "train"
                             ],
-                            "default": "valid",
+                            "default_value": "valid",
                             "probabilities": null
                         },
                         {
@@ -1303,7 +1303,7 @@
                             "log": false,
                             "lower": 1,
                             "upper": 3,
-                            "default": 1
+                            "default_value": 1
                         },
                         {
                             "name": "learning_rate_init",
@@ -1311,7 +1311,7 @@
                             "log": true,
                             "lower": 0.0001,
                             "upper": 0.5,
-                            "default": 0.001
+                            "default_value": 0.001
                         },
                         {
                             "name": "n_iter_no_change",
@@ -1324,7 +1324,7 @@
                             "log": true,
                             "lower": 16,
                             "upper": 264,
-                            "default": 32
+                            "default_value": 32
                         },
                         {
                             "name": "shuffle",
@@ -1372,7 +1372,7 @@
                             "log": true,
                             "lower": 1e-07,
                             "upper": 0.1,
-                            "default": 0.0001
+                            "default_value": 0.0001
                         },
                         {
                             "name": "average",
@@ -1381,7 +1381,7 @@
                                 "False",
                                 "True"
                             ],
-                            "default": "False",
+                            "default_value": "False",
                             "probabilities": null
                         },
                         {
@@ -1397,7 +1397,7 @@
                                 "invscaling",
                                 "constant"
                             ],
-                            "default": "invscaling",
+                            "default_value": "invscaling",
                             "probabilities": null
                         },
                         {
@@ -1409,7 +1409,7 @@
                                 "epsilon_insensitive",
                                 "squared_epsilon_insensitive"
                             ],
-                            "default": "squared_error",
+                            "default_value": "squared_error",
                             "probabilities": null
                         },
                         {
@@ -1420,7 +1420,7 @@
                                 "l2",
                                 "elasticnet"
                             ],
-                            "default": "l2",
+                            "default_value": "l2",
                             "probabilities": null
                         },
                         {
@@ -1429,7 +1429,7 @@
                             "log": true,
                             "lower": 1e-05,
                             "upper": 0.1,
-                            "default": 0.0001
+                            "default_value": 0.0001
                         },
                         {
                             "name": "epsilon",
@@ -1437,7 +1437,7 @@
                             "log": true,
                             "lower": 1e-05,
                             "upper": 0.1,
-                            "default": 0.1
+                            "default_value": 0.1
                         },
                         {
                             "name": "eta0",
@@ -1445,7 +1445,7 @@
                             "log": true,
                             "lower": 1e-07,
                             "upper": 0.1,
-                            "default": 0.01
+                            "default_value": 0.01
                         },
                         {
                             "name": "l1_ratio",
@@ -1453,7 +1453,7 @@
                             "log": true,
                             "lower": 1e-09,
                             "upper": 1.0,
-                            "default": 0.15
+                            "default_value": 0.15
                         },
                         {
                             "name": "power_t",
@@ -1461,7 +1461,7 @@
                             "log": false,
                             "lower": 1e-05,
                             "upper": 1.0,
-                            "default": 0.25
+                            "default_value": 0.25
                         }
                     ],
                     "conditions": [
