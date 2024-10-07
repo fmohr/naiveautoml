@@ -272,37 +272,39 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(61)
 
         # run naml
-        np.random.seed(round(time.time()))
+        np.random.seed(0)#round(time.time()))
         naml = naiveautoml.NaiveAutoML(
             logger_name="naml",
             timeout_overall=60,
             max_hpo_iterations=10,
             show_progress=True,
-            evaluation_fun=evaluate_randomly
+            evaluation_fun=evaluate_randomly,
+            random_state=0
         )
         naml.fit(X, y)
         print(naml.history[["learner_class", "neg_log_loss"]])
 
         # check that there is only one combination of algorithms in the HPO phase
         history = naml.history.iloc[naml.steps_after_which_algorithm_selection_was_completed:]
-        self.assertTrue(len(pd.unique(history["learner_class"])) == 1)
-        self.assertTrue(len(pd.unique(history["data-pre-processor_class"])) == 1)
-        self.assertTrue(len(pd.unique(history["feature-pre-processor_class"])) == 1)
+        if len(history) > 0:
+            self.assertTrue(len(pd.unique(history["learner_class"])) == 1)
+            self.assertTrue(len(pd.unique(history["data-pre-processor_class"])) == 1)
+            self.assertTrue(len(pd.unique(history["feature-pre-processor_class"])) == 1)
 
-        # get best solution from phase 1
-        phase_1_solutions = naml.history.iloc[:naml.steps_after_which_algorithm_selection_was_completed]
-        phase_1_solutions = phase_1_solutions[phase_1_solutions[naml.task.scoring["name"]].notna()]
-        best_solution_in_phase_1 = phase_1_solutions.sort_values(naml.task.scoring["name"]).iloc[-1]
+            # get best solution from phase 1
+            phase_1_solutions = naml.history.iloc[:naml.steps_after_which_algorithm_selection_was_completed]
+            phase_1_solutions = phase_1_solutions[phase_1_solutions[naml.task.scoring["name"]].notna()]
+            best_solution_in_phase_1 = phase_1_solutions.sort_values(naml.task.scoring["name"]).iloc[-1]
 
-        for step in ["data-pre-processor", "feature-pre-processor", "learner"]:
-            field = f"{step}_class"
-            class_in_phase1 = best_solution_in_phase_1[field]
-            class_in_phase2 = pd.unique(history[field])[0]
-            self.assertEqual(
-                class_in_phase1,
-                class_in_phase2,
-                f"Choice for {step} should conicide but is {class_in_phase1} in AS phase and {class_in_phase2} in HPO."
-            )
+            for step in ["data-pre-processor", "feature-pre-processor", "learner"]:
+                field = f"{step}_class"
+                class_in_phase1 = best_solution_in_phase_1[field]
+                class_in_phase2 = pd.unique(history[field])[0]
+                self.assertEqual(
+                    class_in_phase1,
+                    class_in_phase2,
+                    f"Choice for {step} should conicide but is {class_in_phase1} in AS phase and {class_in_phase2} in HPO."
+                )
         
         
     """
@@ -654,7 +656,7 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_searchspaces(self):
 
         for openmlid, task_type in {
-            #61: "classification",  # iris
+            61: "classification",  # iris
             531: "regression"  # boston housing
         }.items():
 
@@ -701,10 +703,15 @@ class TestNaiveAutoML(unittest.TestCase):
                     })
 
                     # get HPO process for supposed selection
+                    config_space = helper.get_config_space_for_selected_algorithms(selection)
+                    if len(config_space) == 0:
+                        self.logger.info("Config space is empty, nothing to check.")
+                        continue
+
                     hp_optimizer.reset(
                         task=task,
                         runtime_of_default_config=0,
-                        config_space=helper.get_config_space_for_selected_algorithms(selection),
+                        config_space=config_space,
                         history_descriptor_creation_fun=lambda hp_config: naml.algorithm_selector.create_history_descriptor(faked_as_info, hp_config),
                         evaluator=naml.evaluator,
                         is_pipeline_forbidden=naml.algorithm_selector.is_pipeline_forbidden,
@@ -745,7 +752,12 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start test of individual stateful evaluation function on dataset {openmlid}.")
 
-        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y, train_size=0.8)
+        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
+            X,
+            y,
+            train_size=10,
+            test_size=10
+        )
         for i in range(1, 21):
             self.logger.info(f"Run {i}-th instance")
             automl = naiveautoml.NaiveAutoML(

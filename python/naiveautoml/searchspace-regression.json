@@ -906,7 +906,7 @@
                             "default_value": 1e-06
                         },
                         {
-                            "name": "n_iter",
+                            "name": "max_iter",
                             "type": "constant",
                             "value": 300
                         },

@@ -1305,26 +1305,6 @@
                 "params": {
                     "hyperparameters": [
                         {
-                            "name": "penalty",
-                            "type": "categorical",
-                            "choices": [
-                                "l1",
-                                "l2",
-                                "elasticnet",
-                                "None"
-                            ],
-                            "default_value": "l2"
-                        },
-                        {
-                            "name": "dual",
-                            "type": "categorical",
-                            "choices": [
-                                "True",
-                                "False"
-                            ],
-                            "default_value": "False"
-                        },
-                        {
                             "name": "C",
                             "type": "uniform_float",
                             "log": true,
