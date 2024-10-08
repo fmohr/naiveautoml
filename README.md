@@ -9,7 +9,7 @@ Other than most AutoML tools, `naiveautoml` has no (also no implicit) definition
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.1.3.
+The current version is 0.1.5.
 
 We highly recommend to check out the [usage example python notebook](https://github.com/fmohr/naiveautoml/blob/master/python/usage-example.ipynb).
 
@@ -83,15 +83,27 @@ To additionally evaluate other scoring functions (not used to rank candidates), 
 naml = naiveautoml.NaiveAutoML(scoring="accuracy", passive_scorings=["neg_log_loss", "f1_score"])
 ```
 
-You can also pass a custom scoring function through a dictionary:
+You can also pass a custom scoring function through a tuple:
 
 ```python
 scorer = make_scorer(**{
-            "name": "accuracy",
-            "score_func": lambda y, y_pred: np.count_nonzero(y == y_pred).mean(),
+            "score_func": lambda y, y_pred: (y == y_pred).mean(),
             "greater_is_better": True,
-            "needs_proba": False,
-            "needs_threshold": False
+            "response_method": "predict"
+        })
+naml = naiveautoml.NaiveAutoML(scoring=("custom_accuracy", scorer))
+```
+
+another way is to directly pass the scoring function, and, in that case, the function name is inferred and used as a field:
+
+```python
+def custom_accuracy(y, y_pred):
+            return (y == y_pred).mean()
+
+scorer = make_scorer(**{
+            "score_func": custom_accuracy,
+            "greater_is_better": True,
+            "response_method": "predict"
         })
 naml = naiveautoml.NaiveAutoML(scoring=scorer)
 ```
