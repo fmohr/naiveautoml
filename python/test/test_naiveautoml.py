@@ -552,57 +552,65 @@ class TestNaiveAutoML(unittest.TestCase):
     def test_individual_scoring(self, openmlid, exp_runtime, exp_result):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Testing individual scoring function on dataset {openml}")
-        
-        scoring1 = (
-            "accuracy",
-            make_scorer(
-                score_func=lambda y, y_pred: np.count_nonzero(y == y_pred) / len(y),
-                greater_is_better=True,
-                response_method="predict"
-            )
+
+        def accuracy(y, y_pred):
+            return np.count_nonzero(y == y_pred) / len(y)
+
+        def error_rate(y, y_pred):
+            return 1 - np.count_nonzero(y == y_pred) / len(y)
+
+        scoring1 = make_scorer(
+            score_func=accuracy,
+            greater_is_better=True,
+            response_method="predict"
         )
 
-        scoring2 = (
-            "errorrate",
-            make_scorer(
-                score_func=lambda y, y_pred: np.count_nonzero(y != y_pred) / len(y),
-                greater_is_better=False,
-                response_method="predict"
-            )
+        scoring2 = make_scorer(
+            score_func=error_rate,
+            greater_is_better=False,
+            response_method="predict"
         )
-        scorer = scoring1[1]
 
         # run naml
         scores = []
         runtimes = []
-        for seed in range(1, self.num_seeds + 1):
-            
-            # create split
-            self.logger.debug(f"Running test on seed {seed}/{self.num_seeds}")
-            X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y)
-            
-            # run naml
-            start = time.time()
-            naml = naiveautoml.NaiveAutoML(
-                logger_name="naml",
-                max_hpo_iterations=10,
-                show_progress=True,
-                scoring=scoring1,
-                timeout_candidate=2,
-                timeout_overall=20,
-                passive_scorings=[scoring2]
-            )
-            naml.fit(X_train, y_train)
-            end = time.time()
-            runtime = end - start
-            runtimes.append(runtime)
-            
-            # compute test performance
-            self.logger.debug(f"finished training on seed {seed} after {int(np.round(runtime))}s. Now computing performance of solution.")
-            print(scorer)
-            score = scorer(naml, X_test, y_test)
-            scores.append(score)
-            self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
+        for mode in ["tuple", "scoring"]:
+            for seed in range(1, self.num_seeds + 1):
+
+                # create split
+                self.logger.debug(f"Running test on seed {seed}/{self.num_seeds}")
+                X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X, y)
+
+                if mode == "tuple":
+                    s1 = ("accuracy", scoring1)
+                    s2 = ("error_rate", scoring2)
+                elif mode == "scoring":
+                    s1 = scoring1
+                    s2 = scoring2
+                else:
+                    raise ValueError()
+
+                # run naml
+                start = time.time()
+                naml = naiveautoml.NaiveAutoML(
+                    logger_name="naml",
+                    max_hpo_iterations=10,
+                    show_progress=True,
+                    scoring=s1,
+                    timeout_candidate=2,
+                    timeout_overall=20,
+                    passive_scorings=[s2]
+                )
+                naml.fit(X_train, y_train)
+                end = time.time()
+                runtime = end - start
+                runtimes.append(runtime)
+
+                # compute test performance
+                self.logger.debug(f"finished training on seed {seed} after {int(np.round(runtime))}s. Now computing performance of solution.")
+                score = scoring1(naml, X_test, y_test)
+                scores.append(score)
+                self.logger.debug(f"finished test on seed {seed}. Test score for this run is {score}")
             
         # check conditions
         runtime_mean = int(np.round(np.mean(runtimes)))
@@ -800,7 +808,8 @@ class TestNaiveAutoML(unittest.TestCase):
                                 "ValueError: array must not contain infs or NaNs",
                                 "ValueError: Input X contains infinity or a value too large for",
                                 "ValueError: illegal value in 4th argument of internal gesdd",
-                                "ValueError: Found array with 0 feature(s)"
+                                "ValueError: Found array with 0 feature(s)",
+                                "Expected n_neighbors <= n_samples_fit, but n_neighbors"
                             ]
                             if not any([t in exception for t in allowed_exception_texts]):
                                 self.logger.exception(exception)

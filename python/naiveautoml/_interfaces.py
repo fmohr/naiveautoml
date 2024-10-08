@@ -46,20 +46,32 @@ class SupervisedTask:
 
             is_str = isinstance(scoring, str)
             is_tuple = isinstance(scoring, tuple)
-            if not is_str and not is_tuple:
-                raise ValueError(f"scoring must be either str or tuple but is {type(scoring)}")
-            if is_tuple and len(scoring) != 2:
-                raise ValueError("if scoring is a tuple, it must contain 2 elements, a name and the scoring function")
+            is_scorer = isinstance(scoring, Callable)
+            if not is_str and not is_scorer and not is_tuple:
+                raise ValueError(f"scoring must be either str, tuple, or Callable but is {type(scoring)}")
+
+            if is_str:
+                name = scoring
+            elif is_scorer:
+                if not hasattr(scoring, "_score_func"):
+                    raise ValueError("if scoring is a Callable it must have an attribute _score_func")
+                name = scoring._score_func.__name__
+            elif is_tuple:
+                name = scoring[0]
+            else:
+                raise ValueError()
 
             out = {
-                "name": scoring if isinstance(scoring, str) else scoring[0]
+                "name": name
             }
             if type_of_target(self._y) == "multilabel-indicator":
                 out["fun"] = None
             else:
-                if isinstance(scoring, str):
+                if is_str:
                     out["fun"] = get_scorer(scoring)
-                else:
+                elif is_scorer:
+                    out["fun"] = scoring
+                elif is_tuple:
                     out["fun"] = scoring[1]
             return out
 
