@@ -144,7 +144,12 @@ class SplitBasedEvaluator:
         anchors = []
         runtimes = []
         for s in range(3):
-            X_a, _, y_a, _ = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=anchor)
+            X_a, _, y_a, _ = sklearn.model_selection.train_test_split(
+                X,
+                y,
+                stratify=y if self.task_type == "classification" else None,
+                train_size=anchor
+            )
             t_start = time.time()
             pl.fit(X_a, y_a)
             runtime = time.time() - t_start
