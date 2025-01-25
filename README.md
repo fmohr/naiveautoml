@@ -9,7 +9,7 @@ Other than most AutoML tools, `naiveautoml` has no (also no implicit) definition
 
 ## Python
 Install via `pip install naiveautoml.`
-The current version is 0.1.5.
+The current version is 0.1.6.
 
 We highly recommend to check out the [usage example python notebook](https://github.com/fmohr/naiveautoml/blob/master/python/usage-example.ipynb).
 
