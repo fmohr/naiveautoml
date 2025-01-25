@@ -507,7 +507,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         learner = pl["learner"] if task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
 
         # forbid pipelines with SVMs if the main scoring function requires probabilities
-        if learner.__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC]:
+        if learner.__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC] and self.task == "classification":
             if task.scoring["fun"] is not None and task.scoring["fun"]._response_method == "predict_proba":
                 return True
 
