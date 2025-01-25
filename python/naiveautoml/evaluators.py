@@ -5,9 +5,16 @@ from lccv import lccv
 import numpy as np
 import pandas as pd
 import sklearn
+import time
 
 
-class LccvEvaluator:
+class Evaluator:
+
+    def estimate_runtime(self, pl, X, y):
+        return None
+
+
+class LccvEvaluator(Evaluator):
 
     def __init__(self,
                  task_type,
@@ -129,6 +136,29 @@ class SplitBasedEvaluator:
                 return None, None
             else:
                 raise
+
+    def estimate_runtime(self, pl, X, y):
+
+        # on large datasets, we build a quick runtime model to see whether we will violate the time constraint
+        anchor = 16
+        anchors = []
+        runtimes = []
+        for s in range(3):
+            X_a, _, y_a, _ = sklearn.model_selection.train_test_split(
+                X,
+                y,
+                stratify=y if self.task_type == "classification" else None,
+                train_size=anchor
+            )
+            t_start = time.time()
+            pl.fit(X_a, y_a)
+            runtime = time.time() - t_start
+            anchors.append(anchor)
+            runtimes.append(runtime)
+        a = np.max(runtimes) / anchor
+        regular_training_size = next(self.splitter.split(X, y))[0].shape[0]
+        expected_traintime_on_full_data = a * regular_training_size
+        return expected_traintime_on_full_data * self.splitter.n_splits
 
     def evaluate_splits(self, pl, X, y, scorings, error_treatment):
         scores = {scoring["name"]: [] for scoring in scorings}

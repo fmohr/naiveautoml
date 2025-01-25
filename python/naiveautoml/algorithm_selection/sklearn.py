@@ -507,9 +507,27 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         learner = pl["learner"] if task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
 
         # forbid pipelines with SVMs if the main scoring function requires probabilities
-        if learner.__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC]:
+        if learner.__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC] and self.task == "classification":
             if task.scoring["fun"] is not None and task.scoring["fun"]._response_method == "predict_proba":
                 return True
+
+            if task.X.shape[0] > 100:
+
+                # never treat problems with more than 10k instances
+                if task.X.shape[0] > 10**4:
+                    self.logger.debug("Avoiding execution of SVM on dataset with over 10k instances")
+                    return True
+
+                # for problems with a medium number of instances, estimate the runtime
+                estimated_runtime = self.evaluator.evaluation_fun.estimate_runtime(pl, task.X, task.y)
+
+                # as an additional pessimistic criterion suppose that it runs four times as long as estimated
+                pessimistic_estimate = 4 * estimated_runtime
+                if estimated_runtime is not None and pessimistic_estimate > self.task.timeout_candidate:
+                    self.logger.debug(
+                        f"Avoiding execution of SVM due to an expected runtime of up to {pessimistic_estimate}"
+                    )
+                    return True
 
         # forbid pipelines with scalers and trees
         if "data-pre-processor" in [e[0] for e in pl.steps]:
