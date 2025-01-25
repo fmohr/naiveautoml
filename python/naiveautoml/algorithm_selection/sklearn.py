@@ -30,7 +30,7 @@ from skmultilearn.problem_transform import BinaryRelevance
 
 from ._sklearn_factory import build_estimator
 from ._sklearn_hpo import HPOHelper
-import matplotlib.pyplot as plt
+
 
 def is_component_defined_in_steps(steps, name):
     candidates = [s[1] for s in steps if s[0] == name]
@@ -515,7 +515,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
                 # never treat problems with more than 10k instances
                 if task.X.shape[0] > 10**4:
-                    self.logger.debug(f"Avoiding execution of SVM on dataset with over 10k instances")
+                    self.logger.debug("Avoiding execution of SVM on dataset with over 10k instances")
                     return True
 
                 # for problems with a medium number of instances, estimate the runtime

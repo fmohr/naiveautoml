@@ -7,6 +7,7 @@ import pandas as pd
 import sklearn
 import time
 
+
 class Evaluator:
 
     def estimate_runtime(self, pl, X, y):
@@ -152,11 +153,7 @@ class SplitBasedEvaluator:
         a = np.max(runtimes) / anchor
         regular_training_size = next(self.splitter.split(X, y))[0].shape[0]
         expected_traintime_on_full_data = a * regular_training_size
-        return expected_traintime_on_full_data
-
-        if rt_on_single_fold is None:
-            return None
-        return rt_on_single_fold * self.splitter.n_splits
+        return expected_traintime_on_full_data * self.splitter.n_splits
 
     def evaluate_splits(self, pl, X, y, scorings, error_treatment):
         scores = {scoring["name"]: [] for scoring in scorings}
