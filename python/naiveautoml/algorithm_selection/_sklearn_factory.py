@@ -551,7 +551,6 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y, random_state=None)
         beta_1 = float(params["beta_1"])
         beta_2 = float(params["beta_2"])
         epsilon = float(params["epsilon"])
-        beta_1 = float(params["beta_1"])
 
         # initial fit of only increment trees
         return sklearn.neural_network.MLPRegressor(
@@ -568,8 +567,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y, random_state=None)
             validation_fraction=validation_fraction,
             n_iter_no_change=n_iter_no_change,
             tol=tol,
-            beta_1=beta_2,
-            beta_2=beta_1,
+            beta_1=beta_1,
+            beta_2=beta_2,
             epsilon=epsilon,
             random_state=random_state
             # We do not use these, see comments below in search space
@@ -714,8 +713,8 @@ def compile_pipeline_by_class_and_params(clazz, params, X, y, random_state=None)
             validation_fraction=validation_fraction,
             n_iter_no_change=n_iter_no_change,
             tol=tol,
-            beta_1=beta_2,
-            beta_2=beta_1,
+            beta_1=beta_1,
+            beta_2=beta_2,
             epsilon=epsilon,
             random_state=random_state
         )
