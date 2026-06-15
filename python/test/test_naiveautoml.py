@@ -25,7 +25,7 @@ import time
 import openml
 import pandas as pd
 
-from typing import Callable
+from naiveautoml.evaluators import Evaluator
 import gc
 
 from sklearn.utils.multiclass import type_of_target
@@ -68,7 +68,7 @@ def evaluate_nb_best(pl, X, y, scoring_functions):
     )
 
 
-class TurboEvaluator(Callable):
+class TurboEvaluator(Evaluator):
 
     def __init__(self):
         self.history = []
@@ -668,7 +668,7 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
         self.logger.info(f"Start test of individual stateful evaluation function on dataset {openmlid}.")
 
-        class Evaluator(Callable):
+        class TestEvaluator(Evaluator):
 
             def __init__(self):
                 self.history = []
@@ -690,7 +690,7 @@ class TestNaiveAutoML(unittest.TestCase):
                 self.history.append([pl, results])
 
         scorer = sklearn.metrics.get_scorer("accuracy")
-        evaluation = Evaluator()
+        evaluation = TestEvaluator()
 
         # run naml
         scores = []

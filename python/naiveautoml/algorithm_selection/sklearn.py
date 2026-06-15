@@ -131,7 +131,12 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         else:
             raise ValueError(f"Unsupported task type {task_type}")
         if self._configured_search_space is None or self._configured_search_space == "auto-sklearn":
-            json_str = pkg_resources.read_text('naiveautoml', f'searchspace-{searchspace_file}.json')
+            json_str = (
+                pkg_resources.files("naiveautoml")
+                .joinpath(f"searchspace-{searchspace_file}.json")
+                .read_text(encoding="utf-8")
+            )
+
             self.search_space = json.loads(json_str)
         else:
             if isinstance(self._configured_search_space, str):
@@ -140,7 +145,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         # register the HPO helper
         self.hpo_helper = HPOHelper(self.search_space)
-
+        
         # determine mandatory pre-processing
         self.mandatory_pre_processing = self.get_mandatory_preprocessing(task.X, task.y, task.categorical_attributes)
 
@@ -522,12 +527,13 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                 estimated_runtime = self.evaluator.evaluation_fun.estimate_runtime(pl, task.X, task.y)
 
                 # as an additional pessimistic criterion suppose that it runs four times as long as estimated
-                pessimistic_estimate = 4 * estimated_runtime
-                if estimated_runtime is not None and pessimistic_estimate > self.task.timeout_candidate:
-                    self.logger.debug(
-                        f"Avoiding execution of SVM due to an expected runtime of up to {pessimistic_estimate}"
-                    )
-                    return True
+                if estimated_runtime is not None:
+                    pessimistic_estimate = 4 * estimated_runtime
+                    if estimated_runtime is not None and pessimistic_estimate > self.task.timeout_candidate:
+                        self.logger.debug(
+                            f"Avoiding execution of SVM due to an expected runtime of up to {pessimistic_estimate}"
+                        )
+                        return True
 
         # forbid pipelines with scalers and trees
         if "data-pre-processor" in [e[0] for e in pl.steps]:

@@ -19,8 +19,9 @@ class HPOHelper:
             self.config_spaces[step_name] = {}
 
             for comp in step["components"]:
-                config_space_as_string = json.dumps(comp["params"])
-                self.config_spaces[step_name][comp["class"]] = config_json.read(config_space_as_string)
+                self.config_spaces[step_name][comp["class"]] = (
+                    ConfigurationSpace.from_serialized_dict(json.loads(json.dumps(comp["params"]))) # ConfigSpace is not safe and alters the dictionary!! So we serialize and deserialize for a deep copy.
+                )
 
     def get_config_space_for_selected_algorithms(self, selected_algorithms):
         """

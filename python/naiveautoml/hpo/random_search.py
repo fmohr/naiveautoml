@@ -12,15 +12,17 @@ class RandomHPO(HPOptimizer):
         self.configs_since_last_imp = None
         self.time_since_last_imp = None
         if random_state is None:
-            self.random_state = 1
+            self.random_state = np.random.RandomState(0)
         else:
             self.random_state = random_state
+        self.seed = self.random_state.randint(10**4)
 
     def reset(self, **kwargs):
         super().reset(**kwargs)
         self.its = 0
         self.configs_since_last_imp = 0
         self.time_since_last_imp = 0
+        self.config_space.seed(self.seed)
 
     def step(self, remaining_time=None):
         self.its += 1
@@ -30,7 +32,7 @@ class RandomHPO(HPOptimizer):
         self.logger.info(f"Starting {self.its}-th HPO step. Currently best known score is {self.best_score}")
 
         # draw random parameters
-        candidate_config = self.config_space.sample_configuration(self.random_state)
+        candidate_config = self.config_space.sample_configuration()
         candidate_history_entry = self.create_history_descriptor(candidate_config)
         candidate_history_entry["time"] = time.time()
         candidate_pipeline = candidate_history_entry["pipeline"]
