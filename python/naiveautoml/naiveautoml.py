@@ -230,14 +230,16 @@ class NaiveAutoML:
                 len(relevant_history) > 0 and
                 relevant_history.iloc[0]["pipeline"] is not None
         ):
+            
+            # data type check
+            for step in self.algorithm_selector.search_space:
+                dtype = relevant_history[f"{step['name']}_class"].dtype
+                assert dtype == "object", f"The result column {step['name']}_class should be of type 'object' but is {dtype}"
+
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
-            # get candidate descriptor (replace np.nan with None)
-            as_result_for_best_candidate = dict(relevant_history.sort_values(self.task.scoring["name"]).iloc[-1])
-            for k in as_result_for_best_candidate:
-                if isinstance(as_result_for_best_candidate[k], float) and np.isnan(as_result_for_best_candidate[k]):
-                    as_result_for_best_candidate[k] = None
-
+            # get candidate descriptor
+            as_result_for_best_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
             self.logger.info(f"Extracted algorithm selection report:\n{as_result_for_best_candidate}")
             config_space = self.algorithm_selector.get_config_space(as_result_for_best_candidate)
 
