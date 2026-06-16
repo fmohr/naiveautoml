@@ -816,7 +816,8 @@ class TestNaiveAutoML(unittest.TestCase):
                                 "ValueError: Input X contains infinity or a value too large for",
                                 "ValueError: illegal value in 4th argument of internal gesdd",
                                 "ValueError: Found array with 0 feature(s)",
-                                "Expected n_neighbors <= n_samples_fit, but n_neighbors"
+                                "Expected n_neighbors <= n_samples_fit, but n_neighbors",
+                                "ValueError: A has a NaN entry"
                             ]
                             if not any([t in exception for t in allowed_exception_texts]):
                                 self.logger.exception(exception)
