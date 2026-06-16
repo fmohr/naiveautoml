@@ -1,5 +1,5 @@
 tox==3.28.0
 mypy==0.971
-pytest==7.0.1
+pytest==9.1.0
 openml
 parameterized
