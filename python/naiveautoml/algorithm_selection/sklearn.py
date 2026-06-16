@@ -335,7 +335,12 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         # compile history
         keys = list(self._history[0].keys())
-        return pd.DataFrame({key: [e[key] for e in self._history] for key in keys}, columns=keys).astype(dtypes)
+        df = pd.DataFrame({key: [e[key] for e in self._history] for key in keys}, columns=keys).astype(dtypes)
+        for col in dtypes.keys():
+            assert not any(isinstance(val, float) and np.isnan(val) for val in df[col]), (
+                f"Column {col} has NaN values, which it shouldn't (only None)"
+            )
+        return df
 
     def get_config_space(self, as_report):
         space = self.hpo_helper.get_config_space_for_selected_algorithms({
