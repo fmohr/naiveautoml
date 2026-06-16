@@ -232,8 +232,12 @@ class NaiveAutoML:
         ):
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
-            # get candidate descriptor
-            as_result_for_best_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
+            # get candidate descriptor (replace np.nan with None)
+            as_result_for_best_candidate = dict(relevant_history.sort_values(self.task.scoring["name"]).iloc[-1])
+            for k in as_result_for_best_candidate:
+                if isinstance(as_result_for_best_candidate[k], float) and np.isnan(as_result_for_best_candidate[k]):
+                    as_result_for_best_candidate[k] = None
+
             self.logger.info(f"Extracted algorithm selection report:\n{as_result_for_best_candidate}")
             config_space = self.algorithm_selector.get_config_space(as_result_for_best_candidate)
 
