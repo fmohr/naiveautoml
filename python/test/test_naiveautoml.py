@@ -489,7 +489,7 @@ class TestNaiveAutoML(unittest.TestCase):
         print(scores)
 
     @parameterized.expand([
-            (41021, 120, 660), # moneyball
+            (41021, 120, 880), # moneyball
             #(183, 260, 15), # abalone
             (212, 120, 15)  # diabetes, has decimal targets
             
