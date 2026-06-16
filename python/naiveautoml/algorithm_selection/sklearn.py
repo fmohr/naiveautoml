@@ -315,7 +315,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         self.decisions = decisions
         self.components_with_score = components_with_score
         self.logger.info(
-            "Algorithm Selection ready."
+            "Algorithm Selection ready. "
             "Decisions: " +
             "".join([
                 "\n\t" + str((d[0], d[1]["class"])) + " with performance " + str(components_with_score[d[0]])
@@ -334,7 +334,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         space = self.hpo_helper.get_config_space_for_selected_algorithms({
             step['name']: as_report[f"{step['name']}_class"]
             for step in self.search_space
-            if as_report[f"{step['name']}_class"] is not None
+            if as_report[f"{step['name']}_class"] is not None and not (type(as_report[f"{step['name']}_class"]) == float and np.isnan(as_report[f"{step['name']}_class"]))
         })
         return space
 

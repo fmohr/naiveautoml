@@ -30,10 +30,10 @@ class HPOHelper:
         for step, selection in selected_algorithms.items():
             assert step in self.config_spaces, (
                 f"Cannot retrieve config space for selected algorithm {selection} of step {step}. "
-                f"No config spaces defined for step {step}"
+                f"No config spaces defined for step {step}."
             )
             assert selection in self.config_spaces[step], (
-                f"Cannot retrieve config space for selected algorithm {selection} of step {step}."
+                f"Cannot retrieve config space for selected algorithm {selection} of step {step}. "
                 f"No config space defined for algorithm '{selection}' in step {step}."
             )
             cs.add_configuration_space(

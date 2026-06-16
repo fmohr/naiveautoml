@@ -234,6 +234,7 @@ class NaiveAutoML:
 
             # get candidate descriptor
             as_result_for_best_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
+            self.logger.info(f"Extracted algorithm selection report:\n{as_result_for_best_candidate}")
             config_space = self.algorithm_selector.get_config_space(as_result_for_best_candidate)
 
             if len(config_space) == 0:
