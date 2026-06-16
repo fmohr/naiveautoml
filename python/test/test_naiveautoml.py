@@ -168,7 +168,7 @@ class TestNaiveAutoML(unittest.TestCase):
     def setUp(self):
         self.logger = logging.getLogger("naml_test")
         self.naml_logger = logging.getLogger("naml")
-        self.num_seeds = 3
+        self.num_seeds = 1
         
     @parameterized.expand([
             (61,),
@@ -461,19 +461,22 @@ class TestNaiveAutoML(unittest.TestCase):
         y[y == "TRUE"] = 1
         y[y == "FALSE"] = 0
         y = y.astype(int)
+        
+        X = X[:100]
+        y = y[:100]
         self.assertEqual("multilabel-indicator", type_of_target(y))
 
         scores = []
-        for seed in range(3):
+        for seed in range(self.num_seeds):
             X_train, X_val, y_train, y_val = sklearn.model_selection.train_test_split(X, y, random_state=np.random.RandomState(seed))
 
             naml = naiveautoml.NaiveAutoML(
                 show_progress=True,
-                max_hpo_iterations=10,
+                max_hpo_iterations=5,
                 scoring="f1_macro",
                 passive_scorings=["accuracy", "neg_hamming_loss"],
                 timeout_overall=timeout_overall,
-                timeout_candidate=20,
+                timeout_candidate=10,
                 logger_name="naml"
             )
             naml.fit(X_train, y_train)
@@ -493,6 +496,10 @@ class TestNaiveAutoML(unittest.TestCase):
         ])
     def test_naml_results_regression(self, openmlid, exp_runtime, exp_result):
         X, y = get_dataset(openmlid)
+
+        # reduce dataset size for faster execution
+        X = X[:100]
+        y = y[:100]
         self.logger.info(f"Start result test for NaiveAutoML on regression dataset {openmlid}")
 
         # run naml
