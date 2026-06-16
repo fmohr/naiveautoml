@@ -340,7 +340,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             assert not any(isinstance(val, float) and np.isnan(val) for val in history_as_dict[col]), (
                 f"Column {col} has NaN values, which it shouldn't (only None)"
             )
-        df = pd.DataFrame(history_as_dict, columns=keys).astype(dtypes)
+        df = pd.DataFrame(history_as_dict, columns=keys)
         for col in dtypes.keys():
             assert not any(isinstance(val, float) and np.isnan(val) for val in df[col]), (
                 f"Column {col} has NaN values, which it shouldn't (only None)"
