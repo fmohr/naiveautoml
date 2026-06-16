@@ -278,6 +278,9 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                             d = d[0]["class"]
                         else:
                             d = None
+                        assert d is None or isinstance(d, str), (
+                          f"Decision d must be None or str but is of type {type(d)}"
+                        )
                     summary[f"{step_name_tmp}_class"] = d
                     summary[f"{step_name_tmp}_hps"] = None
                 self._history.append(summary)
