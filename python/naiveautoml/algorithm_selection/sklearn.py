@@ -335,7 +335,12 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         # compile history
         keys = list(self._history[0].keys())
-        df = pd.DataFrame({key: [e[key] for e in self._history] for key in keys}, columns=keys).astype(dtypes)
+        history_as_dict = {key: [e[key] for e in self._history] for key in keys}
+        for col in dtypes.keys():
+            assert not any(isinstance(val, float) and np.isnan(val) for val in history_as_dict[col]), (
+                f"Column {col} has NaN values, which it shouldn't (only None)"
+            )
+        df = pd.DataFrame(history_as_dict, columns=keys).astype(dtypes)
         for col in dtypes.keys():
             assert not any(isinstance(val, float) and np.isnan(val) for val in df[col]), (
                 f"Column {col} has NaN values, which it shouldn't (only None)"
