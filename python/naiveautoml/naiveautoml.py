@@ -237,7 +237,9 @@ class NaiveAutoML:
                 assert dtype == "object", (
                     f"The result column {step['name']}_class should be of type 'object' but is {dtype}"
                 )
-
+            print(self._history.dtypes)
+            print(relevant_history.dtypes)
+            print(relevant_history.sort_values(self.task.scoring["name"]).dtypes)
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
             # get candidate descriptor
