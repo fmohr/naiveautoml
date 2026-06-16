@@ -1,8 +1,7 @@
-import json
+from naiveautoml.commons import get_config_space_from_dict
 import itertools as it
 
 import ConfigSpace
-from ConfigSpace.read_and_write import json as config_json
 from ConfigSpace import ConfigurationSpace
 
 
@@ -19,8 +18,7 @@ class HPOHelper:
             self.config_spaces[step_name] = {}
 
             for comp in step["components"]:
-                config_space_as_string = json.dumps(comp["params"])
-                self.config_spaces[step_name][comp["class"]] = config_json.read(config_space_as_string)
+                self.config_spaces[step_name][comp["class"]] = get_config_space_from_dict(comp["params"])
 
     def get_config_space_for_selected_algorithms(self, selected_algorithms):
         """
@@ -30,6 +28,14 @@ class HPOHelper:
         """
         cs = ConfigurationSpace()
         for step, selection in selected_algorithms.items():
+            assert step in self.config_spaces, (
+                f"Cannot retrieve config space for selected algorithm {selection} of step {step}. "
+                f"No config spaces defined for step {step}."
+            )
+            assert selection in self.config_spaces[step], (
+                f"Cannot retrieve config space for selected algorithm {selection} of step {step}. "
+                f"No config space defined for algorithm '{selection}' in step {step}."
+            )
             cs.add_configuration_space(
                 prefix=step,
                 configuration_space=self.config_spaces[step][selection]
@@ -40,7 +46,7 @@ class HPOHelper:
         config_space = self.get_config_space_for_selected_algorithms(selected_algorithms)
         names = []
         domains = []
-        for hp in config_space.get_hyperparameters():
+        for hp in config_space:
             names.append(hp.name)
             if isinstance(hp, (
                     ConfigSpace.hyperparameters.UnParametrizedHyperparameter,

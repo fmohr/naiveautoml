@@ -1,3 +1,4 @@
+import ConfigSpace.configuration_space
 from ._interfaces import SupervisedTask
 import numpy as np
 import pandas as pd
@@ -11,6 +12,7 @@ import pynisher
 from .evaluators import LccvEvaluator, KFoldEvaluator, MccvEvaluator
 
 import ConfigSpace
+import json
 import traceback
 
 
@@ -211,6 +213,18 @@ class EvaluationPool:
         self.logger.info(f"Completed evaluation of {spl} after {runtime}s. Scores are {scores}")
         self.tellEvaluation(pl, scores[self.scoring["name"]], evaluation_report, timestamp)
         return status, scores, evaluation_report, exception
+
+
+def get_config_space_from_dict(config_dict) -> ConfigSpace.configuration_space.ConfigurationSpace:
+    """
+    This is a helper function due to the numerous bugs and API fluctuations in the ConfigSpace project
+
+    Args:
+        config_dict (dict): dictionary with the configs of an algorithm
+    """
+
+    # ConfigSpace is not safe and alters the dictionary!! So we serialize and deserialize for a deep copy.
+    return ConfigSpace.configuration_space.ConfigurationSpace.from_serialized_dict(json.loads(json.dumps(config_dict)))
 
 
 def get_hyperparameter_space_size(config_space):

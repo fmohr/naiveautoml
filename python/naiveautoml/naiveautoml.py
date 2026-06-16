@@ -230,10 +230,23 @@ class NaiveAutoML:
                 len(relevant_history) > 0 and
                 relevant_history.iloc[0]["pipeline"] is not None
         ):
+
+            # data type check
+            for step in self.algorithm_selector.search_space:
+                dtype = relevant_history[f"{step['name']}_class"].dtype
+                assert dtype == "object", (
+                    f"The result column {step['name']}_class should be of type 'object' but is {dtype}"
+                )
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
             # get candidate descriptor
-            as_result_for_best_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
+            """
+                syntax seems unnecessarily complicated,
+                but this is to cope with some versions of pandas that convert None to NaN.
+                This happens upon .iloc[-1] in some versions
+            """
+            sorted_results = relevant_history.sort_values(self.task.scoring["name"])
+            as_result_for_best_candidate = {col: sorted_results[col].iloc[-1] for col in sorted_results.columns}
             config_space = self.algorithm_selector.get_config_space(as_result_for_best_candidate)
 
             if len(config_space) == 0:

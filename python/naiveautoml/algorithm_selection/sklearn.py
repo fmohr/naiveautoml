@@ -11,7 +11,7 @@ from collections.abc import Iterable
 import scipy as sp
 
 # HPO and process control
-from ConfigSpace.read_and_write import json as config_json
+from naiveautoml.commons import get_config_space_from_dict
 import time
 
 # progress bar
@@ -131,7 +131,12 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         else:
             raise ValueError(f"Unsupported task type {task_type}")
         if self._configured_search_space is None or self._configured_search_space == "auto-sklearn":
-            json_str = pkg_resources.read_text('naiveautoml', f'searchspace-{searchspace_file}.json')
+            json_str = (
+                pkg_resources.files("naiveautoml")
+                .joinpath(f"searchspace-{searchspace_file}.json")
+                .read_text(encoding="utf-8")
+            )
+
             self.search_space = json.loads(json_str)
         else:
             if isinstance(self._configured_search_space, str):
@@ -172,7 +177,11 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             self.opt_ordering = opt_ordering
 
         best_score = -np.inf
+        dtypes = {}
         for step_index, step_name in enumerate(self.opt_ordering):
+
+            dtypes[f"{step_name}_class"] = "object"
+            dtypes[f"{step_name}_hps"] = "object"
 
             # check whether this step should be skipped.
             if self.excluded_steps is not None and step_name in self.excluded_steps:
@@ -269,6 +278,9 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                             d = d[0]["class"]
                         else:
                             d = None
+                        assert d is None or isinstance(d, str), (
+                          f"Decision d must be None or str but is of type {type(d)}"
+                        )
                     summary[f"{step_name_tmp}_class"] = d
                     summary[f"{step_name_tmp}_hps"] = None
                 self._history.append(summary)
@@ -310,7 +322,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         self.decisions = decisions
         self.components_with_score = components_with_score
         self.logger.info(
-            "Algorithm Selection ready."
+            "Algorithm Selection ready. "
             "Decisions: " +
             "".join([
                 "\n\t" + str((d[0], d[1]["class"])) + " with performance " + str(components_with_score[d[0]])
@@ -323,7 +335,15 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         # compile history
         keys = list(self._history[0].keys())
-        return pd.DataFrame({key: [e[key] for e in self._history] for key in keys}, columns=keys)
+        history_as_dict = {
+
+            # important to avoid that None will be converted to NaN
+            key: pd.Series([e[key] for e in self._history], dtype="object")
+            if "_class" in key or "_hps" in key
+            else [e[key] for e in self._history]
+            for key in keys
+        }
+        return pd.DataFrame(history_as_dict, columns=keys)
 
     def get_config_space(self, as_report):
         space = self.hpo_helper.get_config_space_for_selected_algorithms({
@@ -507,7 +527,9 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         learner = pl["learner"] if task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
 
         # forbid pipelines with SVMs if the main scoring function requires probabilities
-        if learner.__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC] and task.inferred_task_type == "classification":
+        if learner.__class__ in [
+            sklearn.svm.SVC, sklearn.svm.LinearSVC
+        ] and task.inferred_task_type == "classification":
             if task.scoring["fun"] is not None and task.scoring["fun"]._response_method == "predict_proba":
                 return True
 
@@ -522,12 +544,13 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
                 estimated_runtime = self.evaluator.evaluation_fun.estimate_runtime(pl, task.X, task.y)
 
                 # as an additional pessimistic criterion suppose that it runs four times as long as estimated
-                pessimistic_estimate = 4 * estimated_runtime
-                if estimated_runtime is not None and pessimistic_estimate > self.task.timeout_candidate:
-                    self.logger.debug(
-                        f"Avoiding execution of SVM due to an expected runtime of up to {pessimistic_estimate}"
-                    )
-                    return True
+                if estimated_runtime is not None:
+                    pessimistic_estimate = 4 * estimated_runtime
+                    if estimated_runtime is not None and pessimistic_estimate > self.task.timeout_candidate:
+                        self.logger.debug(
+                            f"Avoiding execution of SVM due to an expected runtime of up to {pessimistic_estimate}"
+                        )
+                        return True
 
         # forbid pipelines with scalers and trees
         if "data-pre-processor" in [e[0] for e in pl.steps]:
@@ -620,7 +643,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
     def get_pipeline_for_decision_in_step(self, step_name, comp, X, y, decisions):
 
-        config = config_json.read(json.dumps(comp["params"])).get_default_configuration() if comp is not None else None
+        config = get_config_space_from_dict(comp["params"]).get_default_configuration() if comp is not None else None
 
         if self.strictly_naive:  # strictly naive case
             raise ValueError("The strictly naive case is deprecated!")
