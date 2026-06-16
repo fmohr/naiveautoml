@@ -214,6 +214,7 @@ class EvaluationPool:
         self.tellEvaluation(pl, scores[self.scoring["name"]], evaluation_report, timestamp)
         return status, scores, evaluation_report, exception
 
+
 def get_config_space_from_dict(config_dict) -> ConfigSpace.configuration_space.ConfigurationSpace:
     """
     This is a helper function due to the numerous bugs and API fluctuations in the ConfigSpace project
@@ -223,7 +224,8 @@ def get_config_space_from_dict(config_dict) -> ConfigSpace.configuration_space.C
     """
 
     # ConfigSpace is not safe and alters the dictionary!! So we serialize and deserialize for a deep copy.
-    return ConfigSpace.configuration_space.ConfigurationSpace.from_serialized_dict(json.loads(json.dumps(config_dict))) 
+    return ConfigSpace.configuration_space.ConfigurationSpace.from_serialized_dict(json.loads(json.dumps(config_dict)))
+
 
 def get_hyperparameter_space_size(config_space):
     hps = config_space.get_hyperparameters()

@@ -1,5 +1,4 @@
 # core stuff
-import json
 import numpy as np
 
 # HPO and process control

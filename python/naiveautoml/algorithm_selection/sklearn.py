@@ -145,7 +145,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         # register the HPO helper
         self.hpo_helper = HPOHelper(self.search_space)
-        
+
         # determine mandatory pre-processing
         self.mandatory_pre_processing = self.get_mandatory_preprocessing(task.X, task.y, task.categorical_attributes)
 
@@ -512,7 +512,9 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         learner = pl["learner"] if task.inferred_task_type != "multilabel-indicator" else pl["learner"].classifier
 
         # forbid pipelines with SVMs if the main scoring function requires probabilities
-        if learner.__class__ in [sklearn.svm.SVC, sklearn.svm.LinearSVC] and task.inferred_task_type == "classification":
+        if learner.__class__ in [
+            sklearn.svm.SVC, sklearn.svm.LinearSVC
+        ] and task.inferred_task_type == "classification":
             if task.scoring["fun"] is not None and task.scoring["fun"]._response_method == "predict_proba":
                 return True
 
