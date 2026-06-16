@@ -11,7 +11,7 @@ from collections.abc import Iterable
 import scipy as sp
 
 # HPO and process control
-from ConfigSpace.read_and_write import json as config_json
+from naiveautoml.commons import get_config_space_from_dict
 import time
 
 # progress bar
@@ -626,7 +626,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
     def get_pipeline_for_decision_in_step(self, step_name, comp, X, y, decisions):
 
-        config = config_json.read(json.dumps(comp["params"])).get_default_configuration() if comp is not None else None
+        config = get_config_space_from_dict(comp["params"]).get_default_configuration() if comp is not None else None
 
         if self.strictly_naive:  # strictly naive case
             raise ValueError("The strictly naive case is deprecated!")

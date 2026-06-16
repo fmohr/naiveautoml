@@ -1,8 +1,7 @@
-import json
+from naiveautoml.commons import get_config_space_from_dict
 import itertools as it
 
 import ConfigSpace
-from ConfigSpace.read_and_write import json as config_json
 from ConfigSpace import ConfigurationSpace
 
 
@@ -19,9 +18,7 @@ class HPOHelper:
             self.config_spaces[step_name] = {}
 
             for comp in step["components"]:
-                self.config_spaces[step_name][comp["class"]] = (
-                    ConfigurationSpace.from_serialized_dict(json.loads(json.dumps(comp["params"]))) # ConfigSpace is not safe and alters the dictionary!! So we serialize and deserialize for a deep copy.
-                )
+                self.config_spaces[step_name][comp["class"]] = get_config_space_from_dict(comp["params"])
 
     def get_config_space_for_selected_algorithms(self, selected_algorithms):
         """
@@ -41,7 +38,7 @@ class HPOHelper:
         config_space = self.get_config_space_for_selected_algorithms(selected_algorithms)
         names = []
         domains = []
-        for hp in config_space.get_hyperparameters():
+        for hp in config_space:
             names.append(hp.name)
             if isinstance(hp, (
                     ConfigSpace.hyperparameters.UnParametrizedHyperparameter,

@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'naiveautoml',
   packages = find_packages(exclude=["test"]),
-  version = '0.1.5',
+  version = '0.1.6',
   license='MIT',
   description = 'Fast and Timeout-Free Automated Machine Learning for Multi-Class classification, Multi-Label classification, and regression.',
   author = 'Felix Mohr',
@@ -30,9 +30,7 @@ setup(
     'Intended Audience :: Developers',      # Define that your audience are developers
     'Topic :: Software Development :: Build Tools',
     'License :: OSI Approved :: MIT License',
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8',
-    'Programming Language :: Python :: 3.9'
+    'Programming Language :: Python :: 3.12'
   ],
   package_data={'': ['searchspace-classification.json', 'searchspace-regression.json']},
   include_package_data=True

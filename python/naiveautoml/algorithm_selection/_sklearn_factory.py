@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 # HPO and process control
-from ConfigSpace.read_and_write import json as config_json
+from naiveautoml.commons import get_config_space_from_dict
 
 # sklearn
 import sklearn.model_selection
@@ -81,7 +81,7 @@ def get_class(kls):
 def build_estimator(comp, params, X, y, random_state=None):
     if params is None:
         if get_class(comp["class"]) == sklearn.svm.SVC:
-            params = {"kernel": config_json.read(json.dumps(comp["params"])).get_hyperparameter("kernel").value}
+            params = {"kernel": get_config_space_from_dict(comp["params"])["kernel"].value}
         else:
             return get_class(comp["class"])()
     return compile_pipeline_by_class_and_params(get_class(comp["class"]), params, X, y, random_state)
