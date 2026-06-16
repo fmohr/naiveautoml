@@ -247,7 +247,7 @@ class NaiveAutoML:
             """
             sorted_results = relevant_history.sort_values(self.task.scoring["name"])
             print(sorted_results.dtypes)
-            print(sorted_results[-2:])
+            print(sorted_results[["data-pre-processor_class", "feature-pre-processor_class", "learner_class"]][-2:])
             as_result_for_best_candidate = {col: sorted_results[col].iloc[-1] for col in sorted_results.columns}
             self.logger.info(f"Extracted algorithm selection report:\n{as_result_for_best_candidate}")
             config_space = self.algorithm_selector.get_config_space(as_result_for_best_candidate)
