@@ -498,8 +498,8 @@ class TestNaiveAutoML(unittest.TestCase):
         X, y = get_dataset(openmlid)
 
         # reduce dataset size for faster execution
-        X = X[:100]
-        y = y[:100]
+        X = X[:200]
+        y = y[:200]
         self.logger.info(f"Start result test for NaiveAutoML on regression dataset {openmlid}")
 
         # run naml
