@@ -177,7 +177,11 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
             self.opt_ordering = opt_ordering
 
         best_score = -np.inf
+        dtypes = {}
         for step_index, step_name in enumerate(self.opt_ordering):
+
+            dtypes[f"{step_name}_class"] = "object"
+            dtypes[f"{step_name}_hps"] = "object"
 
             # check whether this step should be skipped.
             if self.excluded_steps is not None and step_name in self.excluded_steps:
@@ -328,7 +332,7 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
 
         # compile history
         keys = list(self._history[0].keys())
-        return pd.DataFrame({key: [e[key] for e in self._history] for key in keys}, columns=keys)
+        return pd.DataFrame({key: [e[key] for e in self._history] for key in keys}, columns=keys).astype(dtypes)
 
     def get_config_space(self, as_report):
         space = self.hpo_helper.get_config_space_for_selected_algorithms({

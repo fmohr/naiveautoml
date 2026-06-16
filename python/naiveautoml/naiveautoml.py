@@ -230,11 +230,13 @@ class NaiveAutoML:
                 len(relevant_history) > 0 and
                 relevant_history.iloc[0]["pipeline"] is not None
         ):
-            
+
             # data type check
             for step in self.algorithm_selector.search_space:
                 dtype = relevant_history[f"{step['name']}_class"].dtype
-                assert dtype == "object", f"The result column {step['name']}_class should be of type 'object' but is {dtype}"
+                assert dtype == "object", (
+                    f"The result column {step['name']}_class should be of type 'object' but is {dtype}"
+                )
 
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
