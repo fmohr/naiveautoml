@@ -237,18 +237,16 @@ class NaiveAutoML:
                 assert dtype == "object", (
                     f"The result column {step['name']}_class should be of type 'object' but is {dtype}"
                 )
-            print(self._history.dtypes)
-            print(relevant_history.dtypes)
-            print(relevant_history.sort_values(self.task.scoring["name"]).dtypes)
-            print("Series dtypes:")
-            print(relevant_history.sort_values(self.task.scoring["name"]).iloc[-1].dtypes)
             self.steps_after_which_algorithm_selection_was_completed = len(self._history)
 
             # get candidate descriptor
-            as_result_for_best_candidate = relevant_history.sort_values(self.task.scoring["name"]).iloc[-1]
-            for k, v in as_result_for_best_candidate.items():
-                print(k, type(v))
-
+            """
+                syntax seems unnecessarily complicated,
+                but this is to cope with some versions of pandas that convert None to NaN.
+                This happens upon .iloc[-1] in some versions
+            """
+            sorted_results = relevant_history.sort_values(self.task.scoring["name"])
+            as_result_for_best_candidate = {col: sorted_results[col].iloc[-1] for col in sorted_results.columns}
             self.logger.info(f"Extracted algorithm selection report:\n{as_result_for_best_candidate}")
             config_space = self.algorithm_selector.get_config_space(as_result_for_best_candidate)
 
