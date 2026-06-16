@@ -334,7 +334,9 @@ class SKLearnAlgorithmSelector(AlgorithmSelector):
         space = self.hpo_helper.get_config_space_for_selected_algorithms({
             step['name']: as_report[f"{step['name']}_class"]
             for step in self.search_space
-            if as_report[f"{step['name']}_class"] is not None and not (type(as_report[f"{step['name']}_class"]) == float and np.isnan(as_report[f"{step['name']}_class"]))
+            if as_report[f"{step['name']}_class"] is not None and not (
+                isinstance(as_report[f"{step['name']}_class"], float) and np.isnan(as_report[f"{step['name']}_class"])
+            )
         })
         return space
 
